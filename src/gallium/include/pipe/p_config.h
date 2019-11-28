@@ -48,6 +48,14 @@
 
 #include <limits.h>
 /*
+ * This has PIPE_ARCH_<ENDIANESS>_ENDIAN defines acquired
+ * via meson and in the future might have other defines
+ * if they are found to be easier done on meson than in
+ * preprocessor macros
+ */
+#include "config.h"
+
+/*
  * Compiler
  */
 
@@ -124,51 +132,6 @@
 
 #if defined(__aarch64__)
 #define PIPE_ARCH_AARCH64
-#endif
-
-/*
- * Endian detection.
- */
-
-#ifdef __GLIBC__
-#include <endian.h>
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-# define PIPE_ARCH_LITTLE_ENDIAN
-#elif __BYTE_ORDER == __BIG_ENDIAN
-# define PIPE_ARCH_BIG_ENDIAN
-#endif
-
-#elif defined(__APPLE__)
-#include <machine/endian.h>
-
-#if __DARWIN_BYTE_ORDER == __DARWIN_LITTLE_ENDIAN
-# define PIPE_ARCH_LITTLE_ENDIAN
-#elif __DARWIN_BYTE_ORDER == __DARWIN_BIG_ENDIAN
-# define PIPE_ARCH_BIG_ENDIAN
-#endif
-
-#elif defined(__sun)
-#include <sys/isa_defs.h>
-
-#if defined(_LITTLE_ENDIAN)
-# define PIPE_ARCH_LITTLE_ENDIAN
-#elif defined(_BIG_ENDIAN)
-# define PIPE_ARCH_BIG_ENDIAN
-#endif
-
-#else
-
-#if defined(PIPE_ARCH_X86) || defined(PIPE_ARCH_X86_64) || defined(PIPE_ARCH_ARM) || defined(PIPE_ARCH_AARCH64)
-#define PIPE_ARCH_LITTLE_ENDIAN
-#elif defined(PIPE_ARCH_PPC) || defined(PIPE_ARCH_PPC_64) || defined(PIPE_ARCH_S390)
-#define PIPE_ARCH_BIG_ENDIAN
-#endif
-
-#endif
-
-#if !defined(PIPE_ARCH_LITTLE_ENDIAN) && !defined(PIPE_ARCH_BIG_ENDIAN)
-#error Unknown Endianness
 #endif
 
 /*

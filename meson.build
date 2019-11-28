@@ -224,7 +224,7 @@ pkg_config = configure_file(input : 'virglrenderer.pc.in',
 install_data(pkg_config,
              install_dir: get_option('libdir') + '/pkgconfig')
 
-inc_configuration = include_directories('.')
+inc_configuration = include_directories(['.', 'src'])
 
 with_fuzzer = get_option('fuzzer')
 with_tests = get_option('tests')

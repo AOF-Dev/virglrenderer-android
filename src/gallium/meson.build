@@ -108,7 +108,7 @@ sources_libgallium = [
    'auxiliary/os/os_misc.c',
 ]
 
-inc_gallium = include_directories('include', 'auxiliary', 'auxiliary/util', )
+inc_gallium = include_directories('include', 'auxiliary', 'auxiliary/util')
 
 u_format_table_c = custom_target(
    'u_format_table.c',
@@ -123,11 +123,11 @@ libgallium = static_library(
    'gallium',
    [sources_libgallium, u_format_table_c],
    include_directories : [
-      inc_gallium, include_directories('..')
+      inc_gallium, inc_configuration
    ],
 )
 
 gallium_dep = declare_dependency(
    link_with: libgallium,
-   include_directories: inc_gallium
+   include_directories: [inc_gallium, inc_configuration]
 )
