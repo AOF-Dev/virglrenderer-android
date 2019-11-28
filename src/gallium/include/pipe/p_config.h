@@ -94,14 +94,6 @@
  * Processor architecture
  */
 
-#if defined(__i386__) /* gcc */ || defined(_M_IX86) /* msvc */ || defined(_X86_) || defined(__386__) || defined(i386) || defined(__i386) /* Sun cc */
-#define PIPE_ARCH_X86
-#endif
-
-#if defined(__x86_64__) /* gcc */ || defined(_M_X64) /* msvc */ || defined(_M_AMD64) /* msvc */ || defined(__x86_64) /* Sun cc */
-#define PIPE_ARCH_X86_64
-#endif
-
 #if defined(PIPE_ARCH_X86) || defined(PIPE_ARCH_X86_64)
 #if defined(PIPE_CC_GCC) && !defined(__SSE2__)
 /* #warning SSE2 support requires -msse -msse2 compiler options */
@@ -113,25 +105,6 @@
 #else
 #define PIPE_ARCH_SSSE3
 #endif
-#endif
-
-#if defined(__ppc__) || defined(__ppc64__) || defined(__PPC__)
-#define PIPE_ARCH_PPC
-#if defined(__ppc64__) || defined(__PPC64__)
-#define PIPE_ARCH_PPC_64
-#endif
-#endif
-
-#if defined(__s390x__)
-#define PIPE_ARCH_S390
-#endif
-
-#if defined(__arm__)
-#define PIPE_ARCH_ARM
-#endif
-
-#if defined(__aarch64__)
-#define PIPE_ARCH_AARCH64
 #endif
 
 /*
