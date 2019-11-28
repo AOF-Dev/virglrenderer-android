@@ -10,3 +10,10 @@
 #mesondefine ENABLE_TRACING
 #mesondefine PIPE_ARCH_LITTLE_ENDIAN
 #mesondefine PIPE_ARCH_BIG_ENDIAN
+#mesondefine PIPE_ARCH_X86
+#mesondefine PIPE_ARCH_X86_64
+#mesondefine PIPE_ARCH_PPC
+#mesondefine PIPE_ARCH_PPC_64
+#mesondefine PIPE_ARCH_S390
+#mesondefine PIPE_ARCH_ARM
+#mesondefine PIPE_ARCH_AARCH64
