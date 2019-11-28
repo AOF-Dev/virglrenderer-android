@@ -128,6 +128,34 @@ if cc.has_header('sys/select.h')
   conf_data.set('HAVE_SYS_SELECT_H', 1)
 endif
 
+if host_machine.endian() == 'little'
+  conf_data.set('PIPE_ARCH_LITTLE_ENDIAN', true)
+elif host_machine.endian() == 'big'
+  conf_data.set('PIPE_ARCH_BIG_ENDIAN', true)
+else
+  error('It wasn\'t possible to figure out the endianess of the machine')  
+endif
+
+pipe_arch = host_machine.cpu_family()
+
+if pipe_arch == 'x86'
+  conf_data.set('PIPE_ARCH_X86', true)
+elif pipe_arch == 'x86_64'
+  conf_data.set('PIPE_ARCH_X86_64', true)
+elif pipe_arch == 'ppc'
+  conf_data.set('PIPE_ARCH_PPC', true)
+elif pipe_arch == 'ppc64'
+  conf_data.set('PIPE_ARCH_PPC_64', true)
+elif pipe_arch == 's390x'
+  conf_data.set('PIPE_ARCH_S390', true)
+elif pipe_arch == 'arm'
+  conf_data.set('PIPE_ARCH_ARM', true)
+elif pipe_arch == 'aarch64'
+  conf_data.set('PIPE_ARCH_AARCH64', true)
+else
+  warning('Arch used is not supported')
+endif
+
 if get_option('buildtype') == 'debug'
    add_global_arguments('-DDEBUG=1', language : 'c')
 endif
