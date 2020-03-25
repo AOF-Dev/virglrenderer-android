@@ -39,6 +39,13 @@ option(
 )
 
 option(
+  'venus-experimental',
+  type : 'boolean',
+  value : 'false',
+  description : 'enable support for venus'
+)
+
+option(
   'tests',
   type : 'boolean',
   value : 'false',

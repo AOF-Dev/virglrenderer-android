@@ -74,6 +74,9 @@ vrend_winsys_glx_sources = [
    'vrend_winsys_glx.h',
 ]
 
+venus_sources = [
+]
+
 virgl_depends = [
    gallium_dep,
    epoxy_dep,
@@ -100,6 +103,11 @@ endif
 if have_glx
    virgl_sources += vrend_winsys_glx_sources
    virgl_depends += [glx_dep]
+endif
+
+if with_venus
+   virgl_sources += venus_sources
+   virgl_depends += [venus_dep]
 endif
 
 libvirgl = static_library(

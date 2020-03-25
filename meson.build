@@ -202,6 +202,12 @@ if with_glx
    endif
 endif
 
+with_venus = get_option('venus-experimental')
+if with_venus
+   venus_dep = dependency('vulkan')
+   conf_data.set('ENABLE_VENUS', 1)
+endif
+
 if cc.compiles('void __attribute__((hidden)) func() {}')
    conf_data.set('HAVE_FUNC_ATTRIBUTE_VISIBILITY', 1)
 endif
@@ -250,6 +256,8 @@ lines += 'egl:       ' + (have_egl ? 'yes' : 'no')
 lines += 'glx:       ' + (have_glx ? 'yes' : 'no')
 lines += ''
 lines += 'minigbm_alloc: ' + (with_minigbm_allocation ? 'yes' : 'no' )
+lines += ''
+lines += 'venus:     ' + (with_venus ? 'yes' : 'no' )
 lines += ''
 lines += 'tests:     ' + (with_tests ? 'yes' : 'no' )
 lines += 'fuzzer:    ' + (with_fuzzer ? 'yes' : 'no' )

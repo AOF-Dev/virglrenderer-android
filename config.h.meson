@@ -4,6 +4,7 @@
 #mesondefine HAVE_EPOXY_EGL_H
 #mesondefine HAVE_EPOXY_GLX_H
 #mesondefine ENABLE_MINIGBM_ALLOCATION
+#mesondefine ENABLE_VENUS
 #mesondefine HAVE_FUNC_ATTRIBUTE_VISIBILITY
 #mesondefine HAVE_EVENTFD_H
 #mesondefine HAVE_DLFCN_H
