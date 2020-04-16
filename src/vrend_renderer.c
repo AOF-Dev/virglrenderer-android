@@ -6860,6 +6860,8 @@ static void vrend_resource_gbm_init(struct vrend_resource *gr, uint32_t format)
    uint32_t gbm_format = 0;
    if (virgl_gbm_convert_format(&format, &gbm_format))
       return;
+   if (vrend_winsys_different_gpu())
+      gbm_flags |= GBM_BO_USE_LINEAR;
 
    if (gr->base.depth0 != 1 || gr->base.last_level != 0 || gr->base.nr_samples != 0)
       return;
@@ -10444,7 +10446,8 @@ static void vrend_renderer_fill_caps_v2(int gl_ver, int gles_ver,  union virgl_c
 
 #ifdef ENABLE_MINIGBM_ALLOCATION
    if (has_feature(feat_memory_object) && has_feature(feat_memory_object_fd)) {
-         if (!strcmp(gbm_device_get_backend_name(gbm->device), "i915"))
+         if (!strcmp(gbm_device_get_backend_name(gbm->device), "i915") &&
+             !vrend_winsys_different_gpu())
             caps->v2.capability_bits |= VIRGL_CAP_ARB_BUFFER_STORAGE;
    }
 #endif
@@ -10469,6 +10472,9 @@ static void vrend_renderer_fill_caps_v2(int gl_ver, int gles_ver,  union virgl_c
 
    if (has_feature(feat_khr_debug))
        caps->v2.capability_bits_v2 |= VIRGL_CAP_V2_STRING_MARKER;
+
+   if (vrend_winsys_different_gpu())
+      caps->v2.capability_bits_v2 |= VIRGL_CAP_V2_DIFFERENT_GPU;
 }
 
 void vrend_renderer_fill_caps(uint32_t set, uint32_t version,

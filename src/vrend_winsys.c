@@ -207,3 +207,16 @@ uint32_t vrend_winsys_query_video_memory(void)
    return 0;
 #endif
 }
+
+/* different_gpu means that GBM and GL renderer are on two different DRM devices.
+ * Linear buffers are used for scanouts to make them shareable.
+ * Advise the client to use drawable shadowing for performance.
+ */
+bool vrend_winsys_different_gpu(void)
+{
+#ifdef HAVE_EPOXY_EGL_H
+   if (egl)
+      return virgl_egl_different_gpu(egl);
+#endif
+   return false;
+}
