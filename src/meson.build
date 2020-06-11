@@ -75,6 +75,9 @@ vrend_winsys_glx_sources = [
 ]
 
 venus_sources = [
+   'vkr_cs.c',
+   'vkr_cs.h',
+   'vkr_object.h',
 ]
 
 virgl_depends = [
