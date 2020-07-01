@@ -48,6 +48,9 @@
 #include "util/u_hash_table.h"
 
 struct vtest_resource {
+   struct list_head head;
+
+   uint32_t server_res_id;
    uint32_t res_id;
 
    struct iovec iov;
@@ -82,6 +85,9 @@ struct vtest_renderer {
    struct list_head free_contexts;
    int next_context_id;
 
+   struct list_head free_resources;
+   int next_resource_id;
+
    struct vtest_context *current_context;
 };
 
@@ -115,7 +121,44 @@ static struct vtest_renderer renderer = {
    .max_length = UINT_MAX,
    .fence_id = 1,
    .next_context_id = 1,
+   .next_resource_id = 1,
 };
+
+static struct vtest_resource *vtest_new_resource(uint32_t client_res_id)
+{
+   struct vtest_resource *res;
+
+   if (LIST_IS_EMPTY(&renderer.free_resources)) {
+      res = malloc(sizeof(*res));
+      if (!res) {
+         return NULL;
+      }
+
+      res->server_res_id = renderer.next_resource_id++;
+   } else {
+      res = LIST_ENTRY(struct vtest_resource, renderer.free_resources.next, head);
+      list_del(&res->head);
+   }
+
+   res->res_id = client_res_id ? client_res_id : res->server_res_id;
+   res->iov.iov_base = NULL;
+   res->iov.iov_len = 0;
+
+   return res;
+}
+
+static void vtest_unref_resource(struct vtest_resource *res)
+{
+   /* virgl_renderer_ctx_detach_resource and virgl_renderer_resource_detach_iov
+    * are implied
+    */
+   virgl_renderer_resource_unref(res->res_id);
+
+   if (res->iov.iov_base)
+      munmap(res->iov.iov_base, res->iov.iov_len);
+
+   list_add(&res->head, &renderer.free_resources);
+}
 
 static unsigned
 resource_hash_func(void *key)
@@ -140,15 +183,7 @@ static void
 resource_destroy_func(void *value)
 {
    struct vtest_resource *res = value;
-
-   /* virgl_renderer_ctx_detach_resource and virgl_renderer_resource_detach_iov
-    * are implied
-    */
-   virgl_renderer_resource_unref(res->res_id);
-
-   if (res->iov.iov_base)
-      munmap(res->iov.iov_base, res->iov.iov_len);
-   free(res);
+   vtest_unref_resource(res);
 }
 
 static int vtest_block_write(int fd, void *buf, int size)
@@ -263,6 +298,7 @@ int vtest_init_renderer(int ctx_flags, const char *render_device)
    renderer.rendernode_name = render_device;
    list_inithead(&renderer.active_contexts);
    list_inithead(&renderer.free_contexts);
+   list_inithead(&renderer.free_resources);
 
    ret = virgl_renderer_init(&renderer,
          ctx_flags | VIRGL_RENDERER_THREAD_SYNC, &renderer_cbs);
@@ -292,6 +328,17 @@ void vtest_cleanup_renderer(void)
 
       renderer.next_context_id = 1;
       renderer.current_context = NULL;
+   }
+
+   if (renderer.next_resource_id > 1) {
+      struct vtest_resource *res, *tmp;
+
+      LIST_FOR_EACH_ENTRY_SAFE(res, tmp, &renderer.free_resources, head) {
+         free(res);
+      }
+      list_inithead(&renderer.free_resources);
+
+      renderer.next_resource_id = 1;
    }
 
    virgl_renderer_cleanup(&renderer);
@@ -767,16 +814,18 @@ static int vtest_create_resource_internal(struct vtest_context *ctx,
    if (util_hash_table_get(ctx->resource_table, intptr_to_pointer(args->handle)))
       return -EEXIST;
 
-   ret = virgl_renderer_resource_create(args, NULL, 0);
-   if (ret)
-      return report_failed_call("virgl_renderer_resource_create", ret);
-
-   virgl_renderer_ctx_attach_resource(ctx->ctx_id, args->handle);
-
-   res = CALLOC_STRUCT(vtest_resource);
+   res = vtest_new_resource(args->handle);
    if (!res)
       return -ENOMEM;
-   res->res_id = args->handle;
+   args->handle = res->res_id;
+
+   ret = virgl_renderer_resource_create(args, NULL, 0);
+   if (ret) {
+      vtest_unref_resource(res);
+      return report_failed_call("virgl_renderer_resource_create", ret);
+   }
+
+   virgl_renderer_ctx_attach_resource(ctx->ctx_id, res->res_id);
 
    /* no shm for v1 resources or v2 multi-sample resources */
    if (shm_size) {
@@ -784,22 +833,21 @@ static int vtest_create_resource_internal(struct vtest_context *ctx,
 
       fd = vtest_create_resource_setup_shm(res, shm_size);
       if (fd < 0) {
-         FREE(res);
+         vtest_unref_resource(res);
          return -ENOMEM;
       }
 
       ret = vtest_send_fd(ctx->out_fd, fd);
       if (ret < 0) {
-         munmap(res->iov.iov_base, res->iov.iov_len);
          close(fd);
-         FREE(res);
+         vtest_unref_resource(res);
          return report_failed_call("vtest_send_fd", ret);
       }
 
       /* Closing the file descriptor does not unmap the region. */
       close(fd);
 
-      virgl_renderer_resource_attach_iov(args->handle, &res->iov, 1);
+      virgl_renderer_resource_attach_iov(res->res_id, &res->iov, 1);
    }
 
    util_hash_table_set(ctx->resource_table, intptr_to_pointer(res->res_id), res);
