@@ -804,15 +804,22 @@ static int vtest_create_resource_setup_shm(struct vtest_resource *res,
 }
 
 static int vtest_create_resource_internal(struct vtest_context *ctx,
+                                          uint32_t cmd_id,
                                           struct virgl_renderer_resource_create_args *args,
                                           size_t shm_size)
 {
    struct vtest_resource *res;
    int ret;
 
-   // Check that the handle doesn't already exist.
-   if (util_hash_table_get(ctx->resource_table, intptr_to_pointer(args->handle)))
-      return -EEXIST;
+   if (ctx->protocol_version >= 3) {
+      if (args->handle)
+         return -EINVAL;
+   } else {
+      // Check that the handle doesn't already exist.
+      if (util_hash_table_get(ctx->resource_table, intptr_to_pointer(args->handle))) {
+         return -EEXIST;
+      }
+   }
 
    res = vtest_new_resource(args->handle);
    if (!res)
@@ -826,6 +833,19 @@ static int vtest_create_resource_internal(struct vtest_context *ctx,
    }
 
    virgl_renderer_ctx_attach_resource(ctx->ctx_id, res->res_id);
+
+   if (ctx->protocol_version >= 3) {
+      uint32_t resp_buf[VTEST_HDR_SIZE + 1] = {
+         [VTEST_CMD_LEN] = 1,
+         [VTEST_CMD_ID] = cmd_id,
+         [VTEST_CMD_DATA_START] = res->res_id,
+      };
+      ret = vtest_block_write(ctx->out_fd, resp_buf, sizeof(resp_buf));
+      if (ret < 0) {
+         vtest_unref_resource(res);
+         return ret;
+      }
+   }
 
    /* no shm for v1 resources or v2 multi-sample resources */
    if (shm_size) {
@@ -866,7 +886,7 @@ int vtest_create_resource(UNUSED uint32_t length_dw)
       return ret;
    }
 
-   return vtest_create_resource_internal(ctx, &args, 0);
+   return vtest_create_resource_internal(ctx, VCMD_RESOURCE_CREATE, &args, 0);
 }
 
 int vtest_create_resource2(UNUSED uint32_t length_dw)
@@ -881,7 +901,7 @@ int vtest_create_resource2(UNUSED uint32_t length_dw)
       return ret;
    }
 
-   return vtest_create_resource_internal(ctx, &args, shm_size);
+   return vtest_create_resource_internal(ctx, VCMD_RESOURCE_CREATE2, &args, shm_size);
 }
 
 int vtest_resource_unref(UNUSED uint32_t length_dw)

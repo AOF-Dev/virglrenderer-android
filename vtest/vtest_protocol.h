@@ -60,6 +60,7 @@
 
 #define VCMD_PROTOCOL_VERSION 11
 
+/* since protocol version 2 */
 #define VCMD_RESOURCE_CREATE2 12
 #define VCMD_TRANSFER_GET2 13
 #define VCMD_TRANSFER_PUT2 14
@@ -72,7 +73,7 @@
 #endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 
 #define VCMD_RES_CREATE_SIZE 10
-#define VCMD_RES_CREATE_RES_HANDLE 0
+#define VCMD_RES_CREATE_RES_HANDLE 0 /* must be 0 since protocol version 3 */
 #define VCMD_RES_CREATE_TARGET 1
 #define VCMD_RES_CREATE_FORMAT 2
 #define VCMD_RES_CREATE_BIND 3
@@ -82,9 +83,10 @@
 #define VCMD_RES_CREATE_ARRAY_SIZE 7
 #define VCMD_RES_CREATE_LAST_LEVEL 8
 #define VCMD_RES_CREATE_NR_SAMPLES 9
+/* resp res_id since protocol version 3 */
 
 #define VCMD_RES_CREATE2_SIZE 11
-#define VCMD_RES_CREATE2_RES_HANDLE 0
+#define VCMD_RES_CREATE2_RES_HANDLE 0 /* must be 0 since protocol version 3 */
 #define VCMD_RES_CREATE2_TARGET 1
 #define VCMD_RES_CREATE2_FORMAT 2
 #define VCMD_RES_CREATE2_BIND 3
@@ -95,6 +97,7 @@
 #define VCMD_RES_CREATE2_LAST_LEVEL 8
 #define VCMD_RES_CREATE2_NR_SAMPLES 9
 #define VCMD_RES_CREATE2_DATA_SIZE 10
+/* resp res_id since protocol version 3, and fd if data_size >0 */
 
 #define VCMD_RES_UNREF_SIZE 1
 #define VCMD_RES_UNREF_RES_HANDLE 0
