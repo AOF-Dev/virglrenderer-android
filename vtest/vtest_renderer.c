@@ -444,6 +444,9 @@ int vtest_lazy_init_context(struct vtest_context *ctx)
    if (ctx->context_initialized)
       return 0;
 
+   if (renderer.multi_clients && ctx->protocol_version < 3)
+      return report_failed_call("protocol version too low", -EINVAL);
+
    if (ctx->capset_id) {
       ret = virgl_renderer_context_create_with_flags(ctx->ctx_id,
                                                      ctx->capset_id,
@@ -529,6 +532,9 @@ int vtest_protocol_version(UNUSED uint32_t length_dw)
       printf("Shared memory not supported, fallbacking to protocol version 0\n");
       version = 0;
    }
+
+   if (renderer.multi_clients && version < 3)
+      return report_failed_call("protocol version too low", -EINVAL);
 
    ctx->protocol_version = version;
 

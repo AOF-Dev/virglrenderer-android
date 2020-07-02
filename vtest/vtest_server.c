@@ -186,7 +186,7 @@ static void vtest_server_parse_args(int argc, char **argv)
          server.loop = false;
          break;
       case OPT_MULTI_CLIENTS:
-         printf("EXPERIMENTAL: clients must know and trust each other\n");
+         printf("multi-clients enabled: clients must trust each other\n");
          server.multi_clients = true;
          break;
       case OPT_USE_GLX:
