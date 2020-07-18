@@ -26,7 +26,12 @@
 #define VTEST_PROTOCOL
 
 #define VTEST_DEFAULT_SOCKET_NAME "/tmp/.virgl_test"
+
+#ifdef VIRGL_RENDERER_UNSTABLE_APIS
+#define VTEST_PROTOCOL_VERSION 3
+#else
 #define VTEST_PROTOCOL_VERSION 2
+#endif
 
 /* 32-bit length field */
 /* 32-bit cmd field */
