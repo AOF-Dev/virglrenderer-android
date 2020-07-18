@@ -559,7 +559,9 @@ static void vtest_server_run(void)
       /* init renderer after the first active client is added */
       is_empty = LIST_IS_EMPTY(&server.active_clients);
       if (was_empty && !is_empty) {
-         int ret = vtest_init_renderer(server.ctx_flags, server.render_device);
+         int ret = vtest_init_renderer(server.multi_clients,
+                                       server.ctx_flags,
+                                       server.render_device);
          if (ret) {
             vtest_server_inactivate_clients();
             run = false;

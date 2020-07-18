@@ -42,7 +42,9 @@ struct vtest_input {
    int (*read)(struct vtest_input *input, void *buf, int size);
 };
 
-int vtest_init_renderer(int ctx_flags, const char *render_device);
+int vtest_init_renderer(bool multi_clients,
+                        int ctx_flags,
+                        const char *render_device);
 void vtest_cleanup_renderer(void);
 
 int vtest_create_context(struct vtest_input *input, int out_fd,

@@ -75,6 +75,7 @@ struct vtest_context {
 
 struct vtest_renderer {
    const char *rendernode_name;
+   bool multi_clients;
 
    uint32_t max_length;
 
@@ -291,7 +292,9 @@ int vtest_buf_read(struct vtest_input *input, void *buf, int size)
    return size;
 }
 
-int vtest_init_renderer(int ctx_flags, const char *render_device)
+int vtest_init_renderer(bool multi_clients,
+                        int ctx_flags,
+                        const char *render_device)
 {
    int ret;
 
@@ -306,6 +309,8 @@ int vtest_init_renderer(int ctx_flags, const char *render_device)
       fprintf(stderr, "failed to initialise renderer.\n");
       return -1;
    }
+
+   renderer.multi_clients = multi_clients;
 
    return 0;
 }
