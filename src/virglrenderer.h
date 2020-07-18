@@ -94,6 +94,10 @@ struct virgl_renderer_callbacks {
  */
 #define VIRGL_RENDERER_VENUS         (1 << 6)
 
+/* Disable virgl renderer.
+ */
+#define VIRGL_RENDERER_NO_VIRGL      (1 << 7)
+
 #endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 
 VIRGL_EXPORT int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks *cb);
