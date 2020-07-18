@@ -90,6 +90,10 @@ struct virgl_renderer_callbacks {
  */
 #define VIRGL_RENDERER_USE_EXTERNAL_BLOB (1 << 5)
 
+/* Enable venus renderer.
+ */
+#define VIRGL_RENDERER_VENUS         (1 << 6)
+
 #endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 
 VIRGL_EXPORT int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks *cb);

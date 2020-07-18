@@ -35,6 +35,7 @@
 #include "pipe/p_state.h"
 #include "util/u_format.h"
 #include "util/u_math.h"
+#include "vkr_renderer.h"
 #include "vrend_renderer.h"
 #include "vrend_winsys.h"
 
@@ -55,6 +56,7 @@ struct global_state {
    bool context_initialized;
    bool winsys_initialized;
    bool vrend_initialized;
+   bool vkr_initialized;
 };
 
 static struct global_state state;
@@ -160,6 +162,10 @@ void virgl_renderer_fill_caps(uint32_t set, uint32_t version,
    case VIRGL_RENDERER_CAPSET_VIRGL2:
       vrend_renderer_fill_caps(set, version, (union virgl_caps *)caps);
       break;
+   case VIRGL_RENDERER_CAPSET_VENUS:
+      if (state.vkr_initialized)
+         vkr_get_capset(caps);
+      break;
    default:
       break;
    }
@@ -204,6 +210,11 @@ int virgl_renderer_context_create_with_flags(uint32_t ctx_id,
    case VIRGL_RENDERER_CAPSET_VIRGL:
    case VIRGL_RENDERER_CAPSET_VIRGL2:
       ctx = vrend_renderer_context_create(ctx_id, nlen, name);
+      break;
+   case VIRGL_RENDERER_CAPSET_VENUS:
+      if (!state.vkr_initialized)
+         return EINVAL;
+      ctx = vkr_context_create(nlen, name);
       break;
    default:
       return EINVAL;
@@ -461,6 +472,12 @@ void virgl_renderer_get_cap_set(uint32_t cap_set, uint32_t *max_ver,
    case VIRGL_RENDERER_CAPSET_VIRGL2:
       vrend_renderer_get_cap_set(cap_set, max_ver, max_size);
       break;
+   case VIRGL_RENDERER_CAPSET_VENUS:
+      if (state.vkr_initialized) {
+         *max_ver = 0;
+         *max_size = vkr_get_capset(NULL);
+      }
+      break;
    default:
       *max_ver = 0;
       *max_size = 0;
@@ -558,6 +575,9 @@ void virgl_renderer_cleanup(UNUSED void *cookie)
    if (state.resource_initialized)
       virgl_resource_table_cleanup();
 
+   if (state.vkr_initialized)
+      vkr_renderer_fini();
+
    if (state.vrend_initialized)
       vrend_renderer_fini();
 
@@ -641,6 +661,17 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
       state.vrend_initialized = true;
    }
 
+   if (!state.vkr_initialized && (flags & VIRGL_RENDERER_VENUS)) {
+      uint32_t vkr_flags = 0;
+      if (flags & VIRGL_RENDERER_THREAD_SYNC)
+         vkr_flags |= VKR_RENDERER_THREAD_SYNC;
+
+      int ret = vkr_renderer_init(vkr_flags);
+      if (ret)
+         goto fail;
+      state.vkr_initialized = true;
+   }
+
    return 0;
 
 fail:
@@ -675,6 +706,9 @@ void virgl_renderer_reset(void)
 
    if (state.resource_initialized)
       virgl_resource_table_reset();
+
+   if (state.vkr_initialized)
+      vkr_renderer_reset();
 
    if (state.vrend_initialized)
       vrend_renderer_reset();

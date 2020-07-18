@@ -4008,13 +4008,6 @@ fail:
    return NULL;
 }
 
-struct virgl_renderer_capset_venus {
-   uint32_t wire_format_version;
-   uint32_t vk_xml_version;
-   uint32_t vk_ext_command_serialization_spec_version;
-   uint32_t vk_mesa_venus_protocol_spec_version;
-};
-
 size_t
 vkr_get_capset(void *capset)
 {
