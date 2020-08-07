@@ -610,6 +610,7 @@ static const struct vtest_command {
    [VCMD_GET_PARAM]             = { vtest_get_param,             false },
    [VCMD_GET_CAPSET]            = { vtest_get_capset,            false },
    [VCMD_CONTEXT_INIT]          = { vtest_context_init,          false },
+   [VCMD_RESOURCE_CREATE_BLOB]  = { vtest_resource_create_blob,  true  },
 };
 
 static int vtest_client_dispatch_commands(struct vtest_client *client)

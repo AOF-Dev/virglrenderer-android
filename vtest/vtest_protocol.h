@@ -70,6 +70,7 @@
 #define VCMD_GET_PARAM 15
 #define VCMD_GET_CAPSET 16
 #define VCMD_CONTEXT_INIT 17
+#define VCMD_RESOURCE_CREATE_BLOB 18
 #endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 
 #define VCMD_RES_CREATE_SIZE 10
@@ -140,6 +141,9 @@
 
 #ifdef VIRGL_RENDERER_UNSTABLE_APIS
 
+enum vcmd_param  {
+   VCMD_PARAM_HOST_COHERENT_DMABUF_BLOB = 1,
+};
 #define VCMD_GET_PARAM_SIZE 1
 #define VCMD_GET_PARAM_PARAM 0
 /* resp param validity and value */
@@ -151,6 +155,27 @@
 
 #define VCMD_CONTEXT_INIT_SIZE 1
 #define VCMD_CONTEXT_INIT_CAPSET_ID 0
+
+enum vcmd_blob_type {
+   VCMD_BLOB_TYPE_GUEST        = 1,
+   VCMD_BLOB_TYPE_HOST3D       = 2,
+   VCMD_BLOB_TYPE_HOST3D_GUEST = 3,
+};
+
+enum vcmd_blob_flag {
+   VCMD_BLOB_FLAG_MAPPABLE     = 1 << 0,
+   VCMD_BLOB_FLAG_SHAREABLE    = 1 << 1,
+   VCMD_BLOB_FLAG_CROSS_DEVICE = 1 << 2,
+};
+
+#define VCMD_RES_CREATE_BLOB_SIZE 6
+#define VCMD_RES_CREATE_BLOB_TYPE 0
+#define VCMD_RES_CREATE_BLOB_FLAGS 1
+#define VCMD_RES_CREATE_BLOB_SIZE_LO 2
+#define VCMD_RES_CREATE_BLOB_SIZE_HI 3
+#define VCMD_RES_CREATE_BLOB_ID_LO 4
+#define VCMD_RES_CREATE_BLOB_ID_HI 5
+/* resp res_id and mmap'able fd */
 
 #endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 

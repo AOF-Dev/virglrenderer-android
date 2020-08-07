@@ -84,6 +84,7 @@ int vtest_protocol_version(uint32_t length_dw);
 int vtest_get_param(uint32_t length_dw);
 int vtest_get_capset(uint32_t length_dw);
 int vtest_context_init(uint32_t length_dw);
+int vtest_resource_create_blob(uint32_t length_dw);
 
 void vtest_set_max_length(uint32_t length);
 

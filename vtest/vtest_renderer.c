@@ -76,6 +76,7 @@ struct vtest_context {
 struct vtest_renderer {
    const char *rendernode_name;
    bool multi_clients;
+   uint32_t ctx_flags;
 
    uint32_t max_length;
 
@@ -303,14 +304,16 @@ int vtest_init_renderer(bool multi_clients,
    list_inithead(&renderer.free_contexts);
    list_inithead(&renderer.free_resources);
 
-   ret = virgl_renderer_init(&renderer,
-         ctx_flags | VIRGL_RENDERER_THREAD_SYNC, &renderer_cbs);
+   ctx_flags |= VIRGL_RENDERER_THREAD_SYNC |
+                VIRGL_RENDERER_USE_EXTERNAL_BLOB;
+   ret = virgl_renderer_init(&renderer, ctx_flags, &renderer_cbs);
    if (ret) {
       fprintf(stderr, "failed to initialise renderer.\n");
       return -1;
    }
 
    renderer.multi_clients = multi_clients;
+   renderer.ctx_flags = ctx_flags;
 
    return 0;
 }
@@ -913,6 +916,105 @@ int vtest_create_resource2(UNUSED uint32_t length_dw)
    }
 
    return vtest_create_resource_internal(ctx, VCMD_RESOURCE_CREATE2, &args, shm_size);
+}
+
+int vtest_resource_create_blob(UNUSED uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t res_create_blob_buf[VCMD_RES_CREATE_BLOB_SIZE];
+   uint32_t resp_buf[VTEST_HDR_SIZE + 1];
+   struct virgl_renderer_resource_create_blob_args args;
+   struct vtest_resource *res;
+   int fd;
+   int ret;
+
+   ret = ctx->input->read(ctx->input, res_create_blob_buf,
+                          sizeof(res_create_blob_buf));
+   if (ret != sizeof(res_create_blob_buf))
+      return -1;
+
+   memset(&args, 0, sizeof(args));
+   args.blob_mem = res_create_blob_buf[VCMD_RES_CREATE_BLOB_TYPE];
+   args.blob_flags = res_create_blob_buf[VCMD_RES_CREATE_BLOB_FLAGS];
+   args.size = res_create_blob_buf[VCMD_RES_CREATE_BLOB_SIZE_LO];
+   args.size |= (uint64_t)res_create_blob_buf[VCMD_RES_CREATE_BLOB_SIZE_HI] << 32;
+   args.blob_id = res_create_blob_buf[VCMD_RES_CREATE_BLOB_ID_LO];
+   args.blob_id |= (uint64_t)res_create_blob_buf[VCMD_RES_CREATE_BLOB_ID_HI] << 32;
+
+   res = vtest_new_resource(0);
+   if (!res)
+      return -ENOMEM;
+
+   args.res_handle = res->res_id;
+   args.ctx_id = ctx->ctx_id;
+
+   switch (args.blob_mem) {
+   case VIRGL_RENDERER_BLOB_MEM_GUEST:
+   case VIRGL_RENDERER_BLOB_MEM_HOST3D_GUEST:
+      fd = vtest_create_resource_setup_shm(res, args.size);
+      if (fd < 0) {
+         vtest_unref_resource(res);
+         return -ENOMEM;
+      }
+
+      args.iovecs = &res->iov;
+      args.num_iovs = 1;
+      break;
+   case VIRGL_RENDERER_BLOB_MEM_HOST3D:
+      fd = -1;
+      break;
+   default:
+      return -EINVAL;
+   }
+
+   ret = virgl_renderer_resource_create_blob(&args);
+   if (ret) {
+      if (fd >= 0)
+         close(fd);
+      vtest_unref_resource(res);
+      return report_failed_call("virgl_renderer_resource_create_blob", ret);
+   }
+
+   /* need dmabuf */
+   if (args.blob_mem == VIRGL_RENDERER_BLOB_MEM_HOST3D) {
+      uint32_t fd_type;
+      ret = virgl_renderer_resource_export_blob(res->res_id, &fd_type, &fd);
+      if (ret) {
+         vtest_unref_resource(res);
+         return report_failed_call("virgl_renderer_resource_export_blob", ret);
+      }
+      if (fd_type != VIRGL_RENDERER_BLOB_FD_TYPE_DMABUF) {
+         close(fd);
+         vtest_unref_resource(res);
+         return report_failed_call("virgl_renderer_resource_export_blob", -EINVAL);
+      }
+   }
+
+   virgl_renderer_ctx_attach_resource(ctx->ctx_id, res->res_id);
+
+   resp_buf[VTEST_CMD_LEN] = 1;
+   resp_buf[VTEST_CMD_ID] = VCMD_RESOURCE_CREATE_BLOB;
+   resp_buf[VTEST_CMD_DATA_START] = res->res_id;
+   ret = vtest_block_write(ctx->out_fd, resp_buf, sizeof(resp_buf));
+   if (ret < 0) {
+      close(fd);
+      vtest_unref_resource(res);
+      return ret;
+   }
+
+   ret = vtest_send_fd(ctx->out_fd, fd);
+   if (ret < 0) {
+      close(fd);
+      vtest_unref_resource(res);
+      return report_failed_call("vtest_send_fd", ret);
+   }
+
+   /* Closing the file descriptor does not unmap the region. */
+   close(fd);
+
+   util_hash_table_set(ctx->resource_table, intptr_to_pointer(res->res_id), res);
+
+   return 0;
 }
 
 int vtest_resource_unref(UNUSED uint32_t length_dw)
