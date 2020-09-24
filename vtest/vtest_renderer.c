@@ -1399,24 +1399,18 @@ int vtest_resource_busy_wait(UNUSED uint32_t length_dw)
    /*  handle = bw_buf[VCMD_BUSY_WAIT_HANDLE]; unused as of now */
    flags = bw_buf[VCMD_BUSY_WAIT_FLAGS];
 
-   if (flags == VCMD_BUSY_WAIT_FLAG_WAIT) {
-      do {
-         if (renderer.last_fence == (renderer.fence_id - 1)) {
-            break;
-         }
-
-         fd = virgl_renderer_get_poll_fd();
-         if (fd != -1) {
-            vtest_wait_for_fd_read(fd);
-         }
-
-         virgl_renderer_poll();
-      } while (1);
-
-      busy = false;
-   } else {
+   do {
       busy = renderer.last_fence != (renderer.fence_id - 1);
-   }
+      if (!busy || !(flags & VCMD_BUSY_WAIT_FLAG_WAIT))
+         break;
+
+      /* TODO this is bad when there are multiple clients */
+      fd = virgl_renderer_get_poll_fd();
+      if (fd != -1) {
+         vtest_wait_for_fd_read(fd);
+      }
+      virgl_renderer_poll();
+   } while (true);
 
    hdr_buf[VTEST_CMD_LEN] = 1;
    hdr_buf[VTEST_CMD_ID] = VCMD_RESOURCE_BUSY_WAIT;
