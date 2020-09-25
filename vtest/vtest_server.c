@@ -64,6 +64,8 @@ struct vtest_client
 
    bool in_fd_ready;
    struct vtest_context *context;
+   int context_poll_fd;
+   bool context_need_poll;
 };
 
 struct vtest_server
@@ -298,6 +300,8 @@ static int vtest_server_add_client(int in_fd, int out_fd)
    client->input.data.fd = in_fd;
    client->input.read = vtest_block_read;
 
+   client->context_poll_fd = -1;
+
    list_addtail(&client->head, &server.new_clients);
 
    return 0;
@@ -369,6 +373,11 @@ static void vtest_server_wait_clients(void)
    LIST_FOR_EACH_ENTRY(client, &server.active_clients, head) {
       FD_SET(client->in_fd, &read_fds);
       max_fd = MAX2(client->in_fd, max_fd);
+
+      if (client->context_poll_fd >= 0) {
+         FD_SET(client->context_poll_fd, &read_fds);
+         max_fd = MAX2(client->context_poll_fd, max_fd);
+      }
    }
 
    /* accept new clients when there is none or when multi_clients is set */
@@ -395,6 +404,14 @@ static void vtest_server_wait_clients(void)
    LIST_FOR_EACH_ENTRY(client, &server.active_clients, head) {
       if (FD_ISSET(client->in_fd, &read_fds)) {
          client->in_fd_ready = true;
+      }
+
+      if (client->context_poll_fd >= 0) {
+         if (FD_ISSET(client->context_poll_fd, &read_fds)) {
+            client->context_need_poll = true;
+         }
+      } else if (client->context) {
+         client->context_need_poll = true;
       }
    }
 
@@ -433,6 +450,11 @@ static void vtest_server_dispatch_clients(void)
 
    LIST_FOR_EACH_ENTRY_SAFE(client, tmp, &server.active_clients, head) {
       int err;
+
+      if (client->context_need_poll) {
+         vtest_poll_context(client->context);
+         client->context_need_poll = false;
+      }
 
       if (!client->in_fd_ready)
          continue;
@@ -611,6 +633,12 @@ static const struct vtest_command {
    [VCMD_GET_CAPSET]            = { vtest_get_capset,            false },
    [VCMD_CONTEXT_INIT]          = { vtest_context_init,          false },
    [VCMD_RESOURCE_CREATE_BLOB]  = { vtest_resource_create_blob,  true  },
+   [VCMD_SYNC_CREATE]           = { vtest_sync_create,           true },
+   [VCMD_SYNC_UNREF]            = { vtest_sync_unref,            true },
+   [VCMD_SYNC_READ]             = { vtest_sync_read,             true },
+   [VCMD_SYNC_WRITE]            = { vtest_sync_write,            true },
+   [VCMD_SYNC_WAIT]             = { vtest_sync_wait,             true },
+   [VCMD_SUBMIT_CMD2]           = { vtest_submit_cmd2,           true },
 };
 
 static int vtest_client_dispatch_commands(struct vtest_client *client)
@@ -657,6 +685,7 @@ static int vtest_client_dispatch_commands(struct vtest_client *client)
       if (ret) {
          return VTEST_CLIENT_ERROR_CONTEXT_FAILED;
       }
+      client->context_poll_fd = vtest_get_context_poll_fd(client->context);
    }
 
    vtest_set_current_context(client->context);

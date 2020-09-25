@@ -22,9 +22,14 @@
  *
  **************************************************************************/
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -35,6 +40,9 @@
 #include <sys/uio.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
+#ifdef HAVE_EVENTFD_H
+#include <sys/eventfd.h>
+#endif
 
 #include "vtest.h"
 #include "vtest_shm.h"
@@ -47,6 +55,8 @@
 #include "util/u_memory.h"
 #include "util/u_hash_table.h"
 
+#define VTEST_MAX_SYNC_QUEUE_COUNT 64
+
 struct vtest_resource {
    struct list_head head;
 
@@ -54,6 +64,44 @@ struct vtest_resource {
    uint32_t res_id;
 
    struct iovec iov;
+};
+
+struct vtest_sync {
+   struct list_head head;
+
+   int sync_id;
+   int refcount;
+
+   uint64_t value;
+};
+
+struct vtest_sync_queue {
+   struct list_head submits;
+};
+
+struct vtest_sync_queue_submit {
+   struct list_head head;
+
+   struct vtest_sync_queue *sync_queue;
+
+   uint32_t count;
+   struct vtest_sync **syncs;
+   uint64_t *values;
+};
+
+struct vtest_sync_wait {
+   struct list_head head;
+
+   int fd;
+
+   uint32_t flags;
+   uint64_t valid_before;
+
+   uint32_t count;
+   struct vtest_sync **syncs;
+   uint64_t *values;
+
+   uint32_t signaled_count;
 };
 
 struct vtest_context {
@@ -71,6 +119,11 @@ struct vtest_context {
    bool context_initialized;
 
    struct util_hash_table *resource_table;
+   struct util_hash_table *sync_table;
+
+   struct vtest_sync_queue sync_queues[VTEST_MAX_SYNC_QUEUE_COUNT];
+
+   struct list_head sync_waits;
 };
 
 struct vtest_renderer {
@@ -90,6 +143,9 @@ struct vtest_renderer {
    struct list_head free_resources;
    int next_resource_id;
 
+   struct list_head free_syncs;
+   int next_sync_id;
+
    struct vtest_context *current_context;
 };
 
@@ -108,6 +164,18 @@ static void vtest_write_implicit_fence(UNUSED void *cookie, uint32_t fence_id_in
    renderer->implicit_fence_completed = fence_id_in;
 }
 
+static void vtest_signal_sync_queue(struct vtest_sync_queue *queue,
+                                    struct vtest_sync_queue_submit *to_submit);
+
+static void vtest_write_context_fence(UNUSED void *cookie,
+                                      UNUSED uint32_t ctx_id,
+                                      UNUSED uint64_t queue_id,
+                                      void *fence_cookie)
+{
+   struct vtest_sync_queue_submit *submit = fence_cookie;
+   vtest_signal_sync_queue(submit->sync_queue, submit);
+}
+
 static int vtest_get_drm_fd(void *cookie)
 {
    int fd = -1;
@@ -122,9 +190,10 @@ static int vtest_get_drm_fd(void *cookie)
 }
 
 static struct virgl_renderer_callbacks renderer_cbs = {
-   .version = 2,
+   .version = VIRGL_RENDERER_CALLBACKS_VERSION,
    .write_fence = vtest_write_implicit_fence,
-   .get_drm_fd = vtest_get_drm_fd
+   .get_drm_fd = vtest_get_drm_fd,
+   .write_context_fence = vtest_write_context_fence,
 };
 
 
@@ -132,6 +201,7 @@ static struct vtest_renderer renderer = {
    .max_length = UINT_MAX,
    .next_context_id = 1,
    .next_resource_id = 1,
+   .next_sync_id = 1,
 };
 
 static struct vtest_resource *vtest_new_resource(uint32_t client_res_id)
@@ -170,15 +240,73 @@ static void vtest_unref_resource(struct vtest_resource *res)
    list_add(&res->head, &renderer.free_resources);
 }
 
+static struct vtest_sync *vtest_new_sync(uint64_t value)
+{
+   struct vtest_sync *sync;
+
+   if (LIST_IS_EMPTY(&renderer.free_syncs)) {
+      sync = malloc(sizeof(*sync));
+      if (!sync) {
+         return NULL;
+      }
+
+      sync->sync_id = renderer.next_sync_id++;
+   } else {
+      sync = LIST_ENTRY(struct vtest_sync, renderer.free_syncs.next, head);
+      list_del(&sync->head);
+   }
+
+   sync->refcount = 1;
+   sync->value = value;
+
+   return sync;
+}
+
+static struct vtest_sync *vtest_ref_sync(struct vtest_sync *sync)
+{
+   sync->refcount++;
+   return sync;
+}
+
+static void vtest_unref_sync(struct vtest_sync *sync)
+{
+   assert(sync->refcount);
+   sync->refcount--;
+   if (sync->refcount)
+      return;
+
+   list_add(&sync->head, &renderer.free_syncs);
+}
+
+static void vtest_free_sync_queue_submit(struct vtest_sync_queue_submit *submit)
+{
+   uint32_t i;
+   for (i = 0; i < submit->count; i++)
+      vtest_unref_sync(submit->syncs[i]);
+   free(submit);
+}
+
+static void vtest_free_sync_wait(struct vtest_sync_wait *wait)
+{
+   uint32_t i;
+
+   for (i = 0; i < wait->count; i++) {
+      if (wait->syncs[i])
+         vtest_unref_sync(wait->syncs[i]);
+   }
+   close(wait->fd);
+   free(wait);
+}
+
 static unsigned
-resource_hash_func(void *key)
+u32_hash_func(void *key)
 {
    intptr_t ip = pointer_to_intptr(key);
    return (unsigned)(ip & 0xffffffff);
 }
 
 static int
-resource_compare_func(void *key1, void *key2)
+u32_compare_func(void *key1, void *key2)
 {
    if (key1 < key2) {
       return -1;
@@ -194,6 +322,13 @@ resource_destroy_func(void *value)
 {
    struct vtest_resource *res = value;
    vtest_unref_resource(res);
+}
+
+static void
+sync_destroy_func(void *value)
+{
+   struct vtest_sync *sync = value;
+   vtest_unref_sync(sync);
 }
 
 static int vtest_block_write(int fd, void *buf, int size)
@@ -311,6 +446,7 @@ int vtest_init_renderer(bool multi_clients,
    list_inithead(&renderer.active_contexts);
    list_inithead(&renderer.free_contexts);
    list_inithead(&renderer.free_resources);
+   list_inithead(&renderer.free_syncs);
 
    ctx_flags |= VIRGL_RENDERER_THREAD_SYNC |
                 VIRGL_RENDERER_USE_EXTERNAL_BLOB;
@@ -357,6 +493,18 @@ void vtest_cleanup_renderer(void)
       renderer.next_resource_id = 1;
    }
 
+   if (renderer.next_sync_id > 1) {
+      struct vtest_sync *sync, *tmp;
+
+      LIST_FOR_EACH_ENTRY_SAFE(sync, tmp, &renderer.free_syncs, head) {
+         assert(!sync->refcount);
+         free(sync);
+      }
+      list_inithead(&renderer.free_syncs);
+
+      renderer.next_sync_id = 1;
+   }
+
    virgl_renderer_cleanup(&renderer);
 }
 
@@ -366,18 +514,36 @@ static struct vtest_context *vtest_new_context(struct vtest_input *input,
    struct vtest_context *ctx;
 
    if (LIST_IS_EMPTY(&renderer.free_contexts)) {
+      uint32_t i;
+
       ctx = malloc(sizeof(*ctx));
       if (!ctx) {
          return NULL;
       }
 
-      ctx->resource_table = util_hash_table_create(resource_hash_func,
-                                                   resource_compare_func,
+      ctx->resource_table = util_hash_table_create(u32_hash_func,
+                                                   u32_compare_func,
                                                    resource_destroy_func);
       if (!ctx->resource_table) {
          free(ctx);
          return NULL;
       }
+
+      ctx->sync_table = util_hash_table_create(u32_hash_func,
+                                               u32_compare_func,
+                                               sync_destroy_func);
+      if (!ctx->sync_table) {
+         util_hash_table_destroy(ctx->resource_table);
+         free(ctx);
+         return NULL;
+      }
+
+      for (i = 0; i < VTEST_MAX_SYNC_QUEUE_COUNT; i++) {
+         struct vtest_sync_queue *queue = &ctx->sync_queues[i];
+         list_inithead(&queue->submits);
+      }
+
+      list_inithead(&ctx->sync_waits);
 
       ctx->ctx_id = renderer.next_context_id++;
    } else {
@@ -401,6 +567,7 @@ static void vtest_free_context(struct vtest_context *ctx, bool cleanup)
 {
    if (cleanup) {
       util_hash_table_destroy(ctx->resource_table);
+      util_hash_table_destroy(ctx->sync_table);
       free(ctx);
    } else {
       list_add(&ctx->head, &renderer.free_contexts);
@@ -475,16 +642,45 @@ int vtest_lazy_init_context(struct vtest_context *ctx)
 
 void vtest_destroy_context(struct vtest_context *ctx)
 {
+   struct vtest_sync_wait *wait, *wait_tmp;
+   uint32_t i;
+
    if (renderer.current_context == ctx) {
       renderer.current_context = NULL;
    }
    list_del(&ctx->head);
 
+   for (i = 0; i < VTEST_MAX_SYNC_QUEUE_COUNT; i++) {
+      struct vtest_sync_queue *queue = &ctx->sync_queues[i];
+      struct vtest_sync_queue_submit *submit, *submit_tmp;
+
+      LIST_FOR_EACH_ENTRY_SAFE(submit, submit_tmp, &queue->submits, head)
+         vtest_free_sync_queue_submit(submit);
+      list_inithead(&queue->submits);
+   }
+
+   LIST_FOR_EACH_ENTRY_SAFE(wait, wait_tmp, &ctx->sync_waits, head) {
+      list_del(&wait->head);
+      vtest_free_sync_wait(wait);
+   }
+   list_inithead(&ctx->sync_waits);
+
    free(ctx->debug_name);
    if (ctx->context_initialized)
       virgl_renderer_context_destroy(ctx->ctx_id);
    util_hash_table_clear(ctx->resource_table);
+   util_hash_table_clear(ctx->sync_table);
    vtest_free_context(ctx, false);
+}
+
+void vtest_poll_context(struct vtest_context *ctx)
+{
+   virgl_renderer_context_poll(ctx->ctx_id);
+}
+
+int vtest_get_context_poll_fd(struct vtest_context *ctx)
+{
+   return virgl_renderer_context_get_poll_fd(ctx->ctx_id);
 }
 
 void vtest_set_current_context(struct vtest_context *ctx)
@@ -586,6 +782,18 @@ int vtest_get_param(UNUSED uint32_t length_dw)
    resp_buf[VTEST_CMD_ID] = VCMD_GET_PARAM;
    resp = &resp_buf[VTEST_CMD_DATA_START];
    switch (param) {
+   case VCMD_PARAM_MAX_SYNC_QUEUE_COUNT:
+      resp[0] = true;
+      /* TODO until we have a timerfd */
+#ifdef HAVE_EVENTFD_H
+      if (!getenv("VIRGL_DISABLE_MT"))
+         resp[1] = VTEST_MAX_SYNC_QUEUE_COUNT;
+      else
+         resp[1] = 0;
+#else
+      resp[1] = 0;
+#endif
+      break;
    default:
       resp[0] = false;
       resp[1] = 0;
@@ -1449,6 +1657,478 @@ void vtest_poll_resource_busy_wait(void)
 {
    /* poll the implicit fences */
    virgl_renderer_poll();
+}
+
+static uint64_t vtest_gettime(uint32_t offset_ms)
+{
+   const uint64_t ns_per_ms = 1000000;
+   const uint64_t ns_per_s = ns_per_ms * 1000;
+   struct timespec ts;
+   uint64_t ns;
+
+   if (offset_ms > INT32_MAX)
+      return UINT64_MAX;
+
+   clock_gettime(CLOCK_MONOTONIC, &ts);
+   ns = ns_per_s * ts.tv_sec + ts.tv_nsec;
+
+   return ns + ns_per_ms * offset_ms;
+}
+
+/* TODO this is slow */
+static void vtest_signal_sync(struct vtest_sync *sync, uint64_t value)
+{
+   struct vtest_context *ctx;
+   uint64_t now;
+
+   if (sync->value >= value) {
+      sync->value = value;
+      return;
+   }
+   sync->value = value;
+
+   now = vtest_gettime(0);
+
+   LIST_FOR_EACH_ENTRY(ctx, &renderer.active_contexts, head) {
+      struct vtest_sync_wait *wait, *tmp;
+      LIST_FOR_EACH_ENTRY_SAFE(wait, tmp, &ctx->sync_waits, head) {
+         bool is_ready = false;
+         uint32_t i;
+
+         /* garbage collect */
+         if (wait->valid_before < now) {
+            list_del(&wait->head);
+            vtest_free_sync_wait(wait);
+            continue;
+         }
+
+         for (i = 0; i < wait->count; i++) {
+            if (wait->syncs[i] != sync || wait->values[i] > value)
+               continue;
+
+            vtest_unref_sync(wait->syncs[i]);
+            wait->syncs[i] = NULL;
+
+            wait->signaled_count++;
+            if (wait->signaled_count == wait->count ||
+                (wait->flags & VCMD_SYNC_WAIT_FLAG_ANY)) {
+               is_ready = true;
+               break;
+            }
+         }
+
+         if (is_ready) {
+            const uint64_t val = 1;
+
+            list_del(&wait->head);
+            write(wait->fd, &val, sizeof(val));
+            vtest_free_sync_wait(wait);
+         }
+      }
+   }
+}
+
+static void vtest_signal_sync_queue(struct vtest_sync_queue *queue,
+                                    struct vtest_sync_queue_submit *to_submit)
+{
+   struct vtest_sync_queue_submit *submit, *tmp;
+
+   LIST_FOR_EACH_ENTRY_SAFE(submit, tmp, &queue->submits, head) {
+      uint32_t i;
+
+      list_del(&submit->head);
+
+      for (i = 0; i < submit->count; i++) {
+         vtest_signal_sync(submit->syncs[i], submit->values[i]);
+         vtest_unref_sync(submit->syncs[i]);
+      }
+      free(submit);
+
+      if (submit == to_submit)
+         break;
+   }
+}
+
+int vtest_sync_create(UNUSED uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t sync_create_buf[VCMD_SYNC_CREATE_SIZE];
+   uint32_t resp_buf[VTEST_HDR_SIZE + 1];
+   uint64_t value;
+   struct vtest_sync *sync;
+   int ret;
+
+   ret = ctx->input->read(ctx->input, sync_create_buf, sizeof(sync_create_buf));
+   if (ret != sizeof(sync_create_buf))
+      return -1;
+
+   value = sync_create_buf[VCMD_SYNC_CREATE_VALUE_LO];
+   value |= (uint64_t)sync_create_buf[VCMD_SYNC_CREATE_VALUE_HI] << 32;
+
+   sync = vtest_new_sync(value);
+   if (!sync)
+      return -ENOMEM;
+
+   resp_buf[VTEST_CMD_LEN] = 1;
+   resp_buf[VTEST_CMD_ID] = VCMD_SYNC_CREATE;
+   resp_buf[VTEST_CMD_DATA_START] = sync->sync_id;
+   ret = vtest_block_write(ctx->out_fd, resp_buf, sizeof(resp_buf));
+   if (ret < 0) {
+      vtest_unref_sync(sync);
+      return ret;
+   }
+
+   util_hash_table_set(ctx->sync_table, intptr_to_pointer(sync->sync_id), sync);
+
+   return 0;
+}
+
+int vtest_sync_unref(UNUSED uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t sync_unref_buf[VCMD_SYNC_UNREF_SIZE];
+   uint32_t sync_id;
+   int ret;
+
+   ret = ctx->input->read(ctx->input, &sync_unref_buf,
+                          sizeof(sync_unref_buf));
+   if (ret != sizeof(sync_unref_buf)) {
+      return -1;
+   }
+
+   sync_id = sync_unref_buf[VCMD_SYNC_UNREF_ID];
+   util_hash_table_remove(ctx->sync_table, intptr_to_pointer(sync_id));
+
+   return 0;
+}
+
+int vtest_sync_read(UNUSED uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t sync_read_buf[VCMD_SYNC_READ_SIZE];
+   uint32_t resp_buf[VTEST_HDR_SIZE + 2];
+   uint32_t sync_id;
+   struct vtest_sync *sync;
+   int ret;
+
+   ret = ctx->input->read(ctx->input, &sync_read_buf,
+                          sizeof(sync_read_buf));
+   if (ret != sizeof(sync_read_buf)) {
+      return -1;
+   }
+
+   sync_id = sync_read_buf[VCMD_SYNC_READ_ID];
+
+   sync = util_hash_table_get(ctx->sync_table, intptr_to_pointer(sync_id));
+   if (!sync)
+      return -EEXIST;
+
+   resp_buf[VTEST_CMD_LEN] = 2;
+   resp_buf[VTEST_CMD_ID] = VCMD_SYNC_READ;
+   resp_buf[VTEST_CMD_DATA_START] = (uint32_t)sync->value;
+   resp_buf[VTEST_CMD_DATA_START + 1] = (uint32_t)(sync->value >> 32);
+
+   ret = vtest_block_write(ctx->out_fd, resp_buf, sizeof(resp_buf));
+   if (ret < 0)
+      return ret;
+
+   return 0;
+}
+
+static uint32_t vtest_sync_decode_id_and_value(const uint32_t *data,
+                                               uint32_t index,
+                                               uint64_t *value)
+{
+   data += index * 3;
+
+   /* 32-bit sync id followed by 64-bit sync value */
+   *value = (uint64_t)data[1];
+   *value |= (uint64_t)data[2] << 32;
+   return data[0];
+}
+
+int vtest_sync_write(UNUSED uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t sync_write_buf[VCMD_SYNC_WRITE_SIZE];
+   uint32_t sync_id;
+   uint64_t value;
+   struct vtest_sync *sync;
+   int ret;
+
+   ret = ctx->input->read(ctx->input, &sync_write_buf,
+                          sizeof(sync_write_buf));
+   if (ret != sizeof(sync_write_buf)) {
+      return -1;
+   }
+
+   sync_id = vtest_sync_decode_id_and_value(sync_write_buf, 0, &value);
+
+   sync = util_hash_table_get(ctx->sync_table, intptr_to_pointer(sync_id));
+   if (!sync)
+      return -EEXIST;
+
+   vtest_signal_sync(sync, value);
+
+   return 0;
+}
+
+static int vtest_sync_wait_init(struct vtest_sync_wait *wait,
+                                struct vtest_context *ctx,
+                                uint32_t flags,
+                                uint32_t timeout,
+                                const uint32_t *syncs,
+                                uint32_t sync_count)
+{
+   uint32_t i;
+
+#ifdef HAVE_EVENTFD_H
+   wait->fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+#else
+   /* TODO pipe */
+   wait->fd = -1;
+#endif
+   if (wait->fd < 0)
+      return -ENODEV;
+
+   wait->flags = flags;
+   wait->valid_before = vtest_gettime(timeout);
+
+   wait->count = 0;
+   wait->signaled_count = 0;
+   for (i = 0; i < sync_count; i++) {
+      struct vtest_sync *sync;
+      uint32_t sync_id;
+      uint64_t value;
+
+      sync_id = vtest_sync_decode_id_and_value(syncs, i, &value);
+
+      sync = util_hash_table_get(ctx->sync_table, intptr_to_pointer(sync_id));
+      if (!sync)
+         break;
+
+      /* skip signaled */
+      if (sync->value < value) {
+         wait->syncs[wait->count] = vtest_ref_sync(sync);
+         wait->values[wait->count] = value;
+         wait->count++;
+      }
+   }
+
+   if (i < sync_count) {
+      vtest_free_sync_wait(wait);
+      return -EEXIST;
+   }
+
+   return 0;
+}
+
+int vtest_sync_wait(uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t resp_buf[VTEST_HDR_SIZE];
+   uint32_t sync_count;
+   uint32_t *sync_wait_buf;
+   uint32_t flags;
+   uint32_t timeout;
+   struct vtest_sync_wait *wait;
+   bool is_ready;
+   int ret;
+
+   if (length_dw > renderer.max_length / 4)
+      return -EINVAL;
+
+   if ((length_dw - 2) % 3)
+      return -EINVAL;
+   sync_count = (length_dw - 2) / 3;
+
+   sync_wait_buf = malloc(length_dw * 4);
+   if (!sync_wait_buf)
+      return -ENOMEM;
+
+   ret = ctx->input->read(ctx->input, sync_wait_buf, length_dw * 4);
+   if (ret != (int)length_dw * 4) {
+      free(sync_wait_buf);
+      return -1;
+   }
+
+   flags = sync_wait_buf[VCMD_SYNC_WAIT_FLAGS];
+   timeout = sync_wait_buf[VCMD_SYNC_WAIT_TIMEOUT];
+
+   wait = malloc(sizeof(*wait) +
+                 sizeof(*wait->syncs) * sync_count +
+                 sizeof(*wait->values) * sync_count);
+   if (!wait) {
+      free(sync_wait_buf);
+      return -ENOMEM;
+   }
+   wait->syncs = (void *)&wait[1];
+   wait->values = (void *)&wait->syncs[sync_count];
+
+   ret = vtest_sync_wait_init(wait, ctx, flags, timeout,
+         sync_wait_buf + 2, sync_count);
+   free(sync_wait_buf);
+
+   if (ret) {
+      free(wait);
+      return ret;
+   }
+
+   is_ready = !wait->count;
+   if ((wait->flags & VCMD_SYNC_WAIT_FLAG_ANY) && wait->count < sync_count)
+      is_ready = true;
+
+   if (is_ready) {
+      const uint64_t val = 1;
+      write(wait->fd, &val, sizeof(val));
+   }
+
+   resp_buf[VTEST_CMD_LEN] = 0;
+   resp_buf[VTEST_CMD_ID] = VCMD_SYNC_WAIT;
+   ret = vtest_block_write(ctx->out_fd, resp_buf, sizeof(resp_buf));
+   if (ret >= 0)
+      ret = vtest_send_fd(ctx->out_fd, wait->fd);
+
+   if (ret || is_ready || !timeout)
+      vtest_free_sync_wait(wait);
+   else
+      list_addtail(&wait->head, &ctx->sync_waits);
+
+   return ret;
+}
+
+static int vtest_submit_cmd2_batch(struct vtest_context *ctx,
+                                   const struct vcmd_submit_cmd2_batch *batch,
+                                   const uint32_t *cmds,
+                                   const uint32_t *syncs)
+{
+   struct vtest_sync_queue_submit *submit = NULL;
+   uint32_t i;
+   int ret;
+
+   ret = virgl_renderer_submit_cmd((void *)cmds, ctx->ctx_id, batch->cmd_size);
+   if (ret)
+      return -EINVAL;
+
+   if (!batch->sync_count)
+      return 0;
+
+   if (batch->flags & VCMD_SUBMIT_CMD2_FLAG_SYNC_QUEUE) {
+      submit = malloc(sizeof(*submit) +
+                      sizeof(*submit->syncs) * batch->sync_count +
+                      sizeof(*submit->values) * batch->sync_count);
+      if (!submit)
+         return -ENOMEM;
+
+      submit->count = batch->sync_count;
+      submit->syncs = (void *)&submit[1];
+      submit->values = (void *)&submit->syncs[batch->sync_count];
+   }
+
+   for (i = 0; i < batch->sync_count; i++) {
+      struct vtest_sync *sync;
+      uint32_t sync_id;
+      uint64_t value;
+
+      sync_id = vtest_sync_decode_id_and_value(syncs, i, &value);
+
+      sync = util_hash_table_get(ctx->sync_table, intptr_to_pointer(sync_id));
+      if (!sync)
+         break;
+
+      if (submit) {
+         submit->syncs[i] = vtest_ref_sync(sync);
+         submit->values[i] = value;
+      } else {
+         vtest_signal_sync(sync, value);
+      }
+   }
+
+   if (i < batch->sync_count) {
+      if (submit) {
+         submit->count = i;
+         vtest_free_sync_queue_submit(submit);
+      }
+      return -EEXIST;
+   }
+
+   if (submit) {
+      struct vtest_sync_queue *queue = &ctx->sync_queues[batch->sync_queue_index];
+
+      submit->sync_queue = queue;
+      ret = virgl_renderer_context_create_fence(ctx->ctx_id,
+                                                VIRGL_RENDERER_FENCE_FLAG_MERGEABLE,
+                                                batch->sync_queue_id,
+                                                submit);
+      if (ret) {
+         vtest_free_sync_queue_submit(submit);
+         return ret;
+      }
+
+      list_addtail(&submit->head, &queue->submits);
+   }
+
+   return 0;
+}
+
+int vtest_submit_cmd2(uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t *submit_cmd2_buf;
+   uint32_t batch_count;
+   uint32_t i;
+   int ret;
+
+   if (length_dw > renderer.max_length / 4)
+      return -EINVAL;
+
+   submit_cmd2_buf = malloc(length_dw * 4);
+   if (!submit_cmd2_buf)
+      return -ENOMEM;
+
+   ret = ctx->input->read(ctx->input, submit_cmd2_buf, length_dw * 4);
+   if (ret != (int)length_dw * 4) {
+      free(submit_cmd2_buf);
+      return -1;
+   }
+
+   batch_count = submit_cmd2_buf[VCMD_SUBMIT_CMD2_BATCH_COUNT];
+   if (VCMD_SUBMIT_CMD2_BATCH_COUNT + 8 * batch_count > length_dw) {
+      free(submit_cmd2_buf);
+      return -EINVAL;
+   }
+
+   for (i = 0; i < batch_count; i++) {
+      const struct vcmd_submit_cmd2_batch batch = {
+         .flags = submit_cmd2_buf[VCMD_SUBMIT_CMD2_BATCH_FLAGS(i)],
+         .cmd_offset = submit_cmd2_buf[VCMD_SUBMIT_CMD2_BATCH_CMD_OFFSET(i)],
+         .cmd_size = submit_cmd2_buf[VCMD_SUBMIT_CMD2_BATCH_CMD_SIZE(i)],
+         .sync_offset = submit_cmd2_buf[VCMD_SUBMIT_CMD2_BATCH_SYNC_OFFSET(i)],
+         .sync_count = submit_cmd2_buf[VCMD_SUBMIT_CMD2_BATCH_SYNC_COUNT(i)],
+         .sync_queue_index = submit_cmd2_buf[VCMD_SUBMIT_CMD2_BATCH_SYNC_QUEUE_INDEX(i)],
+         .sync_queue_id = submit_cmd2_buf[VCMD_SUBMIT_CMD2_BATCH_SYNC_QUEUE_ID_LO(i)] |
+                          (uint64_t)submit_cmd2_buf[VCMD_SUBMIT_CMD2_BATCH_SYNC_QUEUE_ID_HI(i)] << 32,
+      };
+      const uint32_t *cmds = &submit_cmd2_buf[batch.cmd_offset];
+      const uint32_t *syncs = &submit_cmd2_buf[batch.sync_offset];
+
+      if (batch.cmd_offset + batch.cmd_size > length_dw ||
+          batch.sync_offset + batch.sync_count * 3 > length_dw ||
+          batch.sync_queue_index >= VTEST_MAX_SYNC_QUEUE_COUNT) {
+         free(submit_cmd2_buf);
+         return -EINVAL;
+      }
+
+      ret = vtest_submit_cmd2_batch(ctx, &batch, cmds, syncs);
+      if (ret) {
+         free(submit_cmd2_buf);
+         return ret;
+      }
+   }
+
+   free(submit_cmd2_buf);
+
+   return 0;
 }
 
 void vtest_set_max_length(uint32_t length)

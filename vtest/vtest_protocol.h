@@ -71,6 +71,12 @@
 #define VCMD_GET_CAPSET 16
 #define VCMD_CONTEXT_INIT 17
 #define VCMD_RESOURCE_CREATE_BLOB 18
+#define VCMD_SYNC_CREATE 19
+#define VCMD_SYNC_UNREF 20
+#define VCMD_SYNC_READ 21
+#define VCMD_SYNC_WRITE 22
+#define VCMD_SYNC_WAIT 23
+#define VCMD_SUBMIT_CMD2 24
 #endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 
 #define VCMD_RES_CREATE_SIZE 10
@@ -142,7 +148,7 @@
 #ifdef VIRGL_RENDERER_UNSTABLE_APIS
 
 enum vcmd_param  {
-   VCMD_PARAM_HOST_COHERENT_DMABUF_BLOB = 1,
+   VCMD_PARAM_MAX_SYNC_QUEUE_COUNT      = 1,
 };
 #define VCMD_GET_PARAM_SIZE 1
 #define VCMD_GET_PARAM_PARAM 0
@@ -176,6 +182,62 @@ enum vcmd_blob_flag {
 #define VCMD_RES_CREATE_BLOB_ID_LO 4
 #define VCMD_RES_CREATE_BLOB_ID_HI 5
 /* resp res_id and mmap'able fd */
+
+#define VCMD_SYNC_CREATE_SIZE 2
+#define VCMD_SYNC_CREATE_VALUE_LO 0
+#define VCMD_SYNC_CREATE_VALUE_HI 1
+/* resp sync id */
+
+#define VCMD_SYNC_UNREF_SIZE 1
+#define VCMD_SYNC_UNREF_ID 0
+
+#define VCMD_SYNC_READ_SIZE 1
+#define VCMD_SYNC_READ_ID 0
+/* resp sync value */
+
+#define VCMD_SYNC_WRITE_SIZE 3
+#define VCMD_SYNC_WRITE_ID 0
+#define VCMD_SYNC_WRITE_VALUE_LO 1
+#define VCMD_SYNC_WRITE_VALUE_HI 2
+
+enum vcmd_sync_wait_flag {
+   VCMD_SYNC_WAIT_FLAG_ANY = 1 << 0,
+};
+#define VCMD_SYNC_WAIT_SIZE(count) (2 + 3 * count)
+#define VCMD_SYNC_WAIT_FLAGS 0
+#define VCMD_SYNC_WAIT_TIMEOUT 1
+#define VCMD_SYNC_WAIT_ID(n)       (2 + 3 * (n) + 0)
+#define VCMD_SYNC_WAIT_VALUE_LO(n) (2 + 3 * (n) + 1)
+#define VCMD_SYNC_WAIT_VALUE_HI(n) (2 + 3 * (n) + 2)
+/* resp poll'able fd */
+
+enum vcmd_submit_cmd2_flag {
+   VCMD_SUBMIT_CMD2_FLAG_SYNC_QUEUE = 1 << 0,
+};
+
+struct vcmd_submit_cmd2_batch {
+   uint32_t flags;
+
+   uint32_t cmd_offset;
+   uint32_t cmd_size;
+
+   /* sync_count pairs of (id, val) starting at sync_offset */
+   uint32_t sync_offset;
+   uint32_t sync_count;
+
+   /* ignored unless VCMD_SUBMIT_CMD2_FLAG_SYNC_QUEUE is set */
+   uint32_t sync_queue_index;
+   uint64_t sync_queue_id;
+};
+#define VCMD_SUBMIT_CMD2_BATCH_COUNT 0
+#define VCMD_SUBMIT_CMD2_BATCH_FLAGS(n)            (1 + 8 * (n) + 0)
+#define VCMD_SUBMIT_CMD2_BATCH_CMD_OFFSET(n)       (1 + 8 * (n) + 1)
+#define VCMD_SUBMIT_CMD2_BATCH_CMD_SIZE(n)         (1 + 8 * (n) + 2)
+#define VCMD_SUBMIT_CMD2_BATCH_SYNC_OFFSET(n)      (1 + 8 * (n) + 3)
+#define VCMD_SUBMIT_CMD2_BATCH_SYNC_COUNT(n)       (1 + 8 * (n) + 4)
+#define VCMD_SUBMIT_CMD2_BATCH_SYNC_QUEUE_INDEX(n) (1 + 8 * (n) + 5)
+#define VCMD_SUBMIT_CMD2_BATCH_SYNC_QUEUE_ID_LO(n) (1 + 8 * (n) + 6)
+#define VCMD_SUBMIT_CMD2_BATCH_SYNC_QUEUE_ID_HI(n) (1 + 8 * (n) + 7)
 
 #endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 

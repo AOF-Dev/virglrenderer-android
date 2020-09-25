@@ -52,6 +52,9 @@ int vtest_create_context(struct vtest_input *input, int out_fd,
 int vtest_lazy_init_context(struct vtest_context *ctx);
 void vtest_destroy_context(struct vtest_context *ctx);
 
+void vtest_poll_context(struct vtest_context *ctx);
+int vtest_get_context_poll_fd(struct vtest_context *ctx);
+
 void vtest_set_current_context(struct vtest_context *ctx);
 
 int vtest_send_caps(uint32_t length_dw);
@@ -85,6 +88,14 @@ int vtest_get_param(uint32_t length_dw);
 int vtest_get_capset(uint32_t length_dw);
 int vtest_context_init(uint32_t length_dw);
 int vtest_resource_create_blob(uint32_t length_dw);
+
+int vtest_sync_create(uint32_t length_dw);
+int vtest_sync_unref(uint32_t length_dw);
+int vtest_sync_read(uint32_t length_dw);
+int vtest_sync_write(uint32_t length_dw);
+int vtest_sync_wait(uint32_t length_dw);
+
+int vtest_submit_cmd2(uint32_t length_dw);
 
 void vtest_set_max_length(uint32_t length);
 
