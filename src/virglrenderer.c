@@ -348,10 +348,13 @@ void virgl_renderer_resource_detach_iov(int res_handle, struct iovec **iov_p, in
    virgl_resource_detach_iov(res);
 }
 
-int virgl_renderer_create_fence(int client_fence_id, uint32_t ctx_id)
+int virgl_renderer_create_fence(int client_fence_id, UNUSED uint32_t ctx_id)
 {
    TRACE_FUNC();
-   return vrend_renderer_create_fence(client_fence_id, ctx_id);
+   const uint32_t fence_id = (uint32_t)client_fence_id;
+   if (state.vrend_initialized)
+      return vrend_renderer_create_ctx0_fence(fence_id);
+   return EINVAL;
 }
 
 void virgl_renderer_force_ctx_0(void)

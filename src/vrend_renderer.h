@@ -352,10 +352,11 @@ void vrend_set_tess_state(struct vrend_context *ctx, const float tess_factors[6]
 
 void vrend_renderer_fini(void);
 
-int vrend_renderer_create_fence(int client_fence_id, uint32_t ctx_id);
+int vrend_renderer_create_fence(struct vrend_context *ctx, uint32_t fence_id);
 
 void vrend_renderer_check_fences(void);
 
+int vrend_renderer_create_ctx0_fence(uint32_t fence_id);
 int vrend_renderer_export_fence(uint32_t fence_id, int* out_fd);
 
 bool vrend_hw_switch_context(struct vrend_context *ctx, bool now);

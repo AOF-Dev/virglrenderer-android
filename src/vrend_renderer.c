@@ -81,8 +81,13 @@ static const uint32_t fake_occlusion_query_samples_passed_default = 1024;
 const struct vrend_if_cbs *vrend_clicbs;
 
 struct vrend_fence {
+   /* When the sync thread is waiting on the fence and the main thread
+    * destroys the context, ctx is set to NULL.  Otherwise, ctx is always
+    * valid.
+    */
+   struct vrend_context *ctx;
    uint32_t fence_id;
-   uint32_t ctx_id;
+
    union {
       GLsync glsyncobj;
 #ifdef HAVE_EPOXY_EGL_H
@@ -327,8 +332,12 @@ struct global_renderer_state {
    int eventfd;
 
    pipe_mutex fence_mutex;
+   /* a fence is always on either of the lists, or is pointed to by
+    * fence_waiting
+    */
    struct list_head fence_list;
    struct list_head fence_wait_list;
+   struct vrend_fence *fence_waiting;
    pipe_condvar fence_cond;
 
    struct vrend_context *ctx0;
@@ -5877,6 +5886,33 @@ static void vrend_free_fences(void)
       free_fence_locked(fence);
 }
 
+static void vrend_free_fences_for_context(struct vrend_context *ctx)
+{
+   struct vrend_fence *fence, *stor;
+
+   if (vrend_state.sync_thread) {
+      pipe_mutex_lock(vrend_state.fence_mutex);
+      LIST_FOR_EACH_ENTRY_SAFE(fence, stor, &vrend_state.fence_list, fences) {
+         if (fence->ctx == ctx)
+            free_fence_locked(fence);
+      }
+      LIST_FOR_EACH_ENTRY_SAFE(fence, stor, &vrend_state.fence_wait_list, fences) {
+         if (fence->ctx == ctx)
+            free_fence_locked(fence);
+      }
+      if (vrend_state.fence_waiting) {
+         /* mark the fence invalid as the sync thread is still waiting on it */
+         vrend_state.fence_waiting->ctx = NULL;
+      }
+      pipe_mutex_unlock(vrend_state.fence_mutex);
+   } else {
+      LIST_FOR_EACH_ENTRY_SAFE(fence, stor, &vrend_state.fence_list, fences) {
+         if (fence->ctx == ctx)
+            free_fence_locked(fence);
+      }
+   }
+}
+
 static bool do_wait(struct vrend_fence *fence, bool can_block)
 {
    bool done = false;
@@ -5908,6 +5944,7 @@ static void wait_sync(struct vrend_fence *fence)
 
    pipe_mutex_lock(vrend_state.fence_mutex);
    list_addtail(&fence->fences, &vrend_state.fence_list);
+   vrend_state.fence_waiting = NULL;
    pipe_mutex_unlock(vrend_state.fence_mutex);
 
    if (write_eventfd(vrend_state.eventfd, 1)) {
@@ -5935,6 +5972,7 @@ static int thread_sync(UNUSED void *arg)
          if (vrend_state.stop_sync_thread)
             break;
          list_del(&fence->fences);
+         vrend_state.fence_waiting = fence;
          pipe_mutex_unlock(vrend_state.fence_mutex);
          wait_sync(fence);
          pipe_mutex_lock(vrend_state.fence_mutex);
@@ -6328,6 +6366,8 @@ void vrend_destroy_context(struct vrend_context *ctx)
       vrend_destroy_sub_context(sub);
    if(ctx->ctx_id)
       vrend_renderer_force_ctx_0();
+
+   vrend_free_fences_for_context(ctx);
 
    LIST_FOR_EACH_ENTRY_SAFE(untyped_res, untyped_res_tmp, &ctx->untyped_resources, head)
       free(untyped_res);
@@ -9118,16 +9158,20 @@ void vrend_renderer_blit(struct vrend_context *ctx,
       vrend_pause_render_condition(ctx, false);
 }
 
-int vrend_renderer_create_fence(int client_fence_id, uint32_t ctx_id)
+int vrend_renderer_create_fence(struct vrend_context *ctx, uint32_t fence_id)
 {
    struct vrend_fence *fence;
+
+   if (!ctx)
+      return EINVAL;
 
    fence = malloc(sizeof(struct vrend_fence));
    if (!fence)
       return ENOMEM;
 
-   fence->ctx_id = ctx_id;
-   fence->fence_id = client_fence_id;
+   fence->ctx = ctx;
+   fence->fence_id = fence_id;
+
 #ifdef HAVE_EPOXY_EGL_H
    if (vrend_state.use_egl_fence) {
       fence->eglsyncobj = virgl_egl_fence_create(egl);
@@ -10912,6 +10956,11 @@ int vrend_renderer_resource_unmap(struct pipe_resource *pres)
    glUnmapBuffer(res->target);
    glBindBufferARB(res->target, 0);
    return 0;
+}
+
+int vrend_renderer_create_ctx0_fence(uint32_t fence_id)
+{
+   return vrend_renderer_create_fence(vrend_state.ctx0, fence_id);
 }
 
 int vrend_renderer_export_fence(uint32_t fence_id, int* out_fd) {
