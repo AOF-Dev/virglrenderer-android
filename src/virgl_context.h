@@ -48,6 +48,12 @@ struct virgl_context_blob {
    void *renderer_data;
 };
 
+struct virgl_context;
+
+typedef void (*virgl_context_fence_retire)(struct virgl_context *ctx,
+                                           uint64_t queue_id,
+                                           void *fence_cookie);
+
 /**
  * Base class for renderer contexts.  For example, vrend_decode_ctx is a
  * subclass of virgl_context.
@@ -56,6 +62,16 @@ struct virgl_context {
    uint32_t ctx_id;
 
    enum virgl_renderer_capset capset_id;
+
+   /*
+    * Each fence goes through submitted, signaled, and retired.  This callback
+    * is called from virgl_context::retire_fences to retire signaled fences of
+    * each queue.  When a queue has multiple signaled fences by the time
+    * virgl_context::retire_fences is called, this callback might not be called
+    * on all fences but only on the latest one, depending on the flags of the
+    * fences.
+    */
+   virgl_context_fence_retire fence_retire;
 
    void (*destroy)(struct virgl_context *ctx);
 
@@ -89,6 +105,21 @@ struct virgl_context {
    int (*submit_cmd)(struct virgl_context *ctx,
                      const void *buffer,
                      size_t size);
+
+   /*
+    * Return an fd that is readable whenever there is any signaled fence in
+    * any queue, or -1 if not supported.
+    */
+   int (*get_fencing_fd)(struct virgl_context *ctx);
+
+   /* retire signaled fences of all queues */
+   void (*retire_fences)(struct virgl_context *ctx);
+
+   /* submit a fence to the queue identified by queue_id */
+   int (*submit_fence)(struct virgl_context *ctx,
+                       uint32_t flags,
+                       uint64_t queue_id,
+                       void *fence_cookie);
 };
 
 struct virgl_context_foreach_args {

@@ -204,6 +204,7 @@ int virgl_renderer_context_create_with_flags(uint32_t ctx_id,
 
    ctx->ctx_id = ctx_id;
    ctx->capset_id = capset_id;
+   ctx->fence_retire = NULL;
 
    ret = virgl_context_add(ctx);
    if (ret) {
