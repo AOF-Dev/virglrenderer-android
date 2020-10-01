@@ -107,8 +107,11 @@ struct vrend_format_table {
    uint32_t flags;
 };
 
+typedef void (*vrend_context_fence_retire)(void *fence_cookie,
+                                           void *retire_data);
+
 struct vrend_if_cbs {
-   void (*write_fence)(unsigned fence_id);
+   vrend_context_fence_retire ctx0_fence_retire;
 
    virgl_gl_context (*create_gl_context)(int scanout, struct virgl_gl_ctx_param *params);
    void (*destroy_gl_context)(virgl_gl_context ctx);
@@ -352,7 +355,13 @@ void vrend_set_tess_state(struct vrend_context *ctx, const float tess_factors[6]
 
 void vrend_renderer_fini(void);
 
-int vrend_renderer_create_fence(struct vrend_context *ctx, void *fence_cookie);
+void vrend_renderer_set_fence_retire(struct vrend_context *ctx,
+                                     vrend_context_fence_retire retire,
+                                     void *retire_data);
+
+int vrend_renderer_create_fence(struct vrend_context *ctx,
+                                uint32_t flags,
+                                void *fence_cookie);
 
 void vrend_renderer_check_fences(void);
 

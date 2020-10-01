@@ -1462,6 +1462,13 @@ static int vrend_decode_pipe_resource_set_type(struct vrend_context *ctx, const 
 static void vrend_decode_ctx_init_base(struct vrend_decode_ctx *dctx,
                                        uint32_t ctx_id);
 
+static void vrend_decode_ctx_fence_retire(void *fence_cookie,
+                                          void *retire_data)
+{
+   struct vrend_decode_ctx *dctx = retire_data;
+   dctx->base.fence_retire(&dctx->base, 0, fence_cookie);
+}
+
 struct virgl_context *vrend_renderer_context_create(uint32_t handle,
                                                     uint32_t nlen,
                                                     const char *debug_name)
@@ -1479,6 +1486,10 @@ struct virgl_context *vrend_renderer_context_create(uint32_t handle,
       free(dctx);
       return NULL;
    }
+
+   vrend_renderer_set_fence_retire(dctx->grctx,
+                                   vrend_decode_ctx_fence_retire,
+                                   dctx);
 
    return &dctx->base;
 }
@@ -1667,6 +1678,29 @@ static int vrend_decode_ctx_submit_cmd(struct virgl_context *ctx,
    return 0;
 }
 
+static int vrend_decode_ctx_get_fencing_fd(UNUSED struct virgl_context *ctx)
+{
+   return vrend_renderer_get_poll_fd();
+}
+
+static void vrend_decode_ctx_retire_fences(UNUSED struct virgl_context *ctx)
+{
+   vrend_renderer_check_fences();
+}
+
+static int vrend_decode_ctx_submit_fence(struct virgl_context *ctx,
+                                         uint32_t flags,
+                                         uint64_t queue_id,
+                                         void *fence_cookie)
+{
+   struct vrend_decode_ctx *dctx = (struct vrend_decode_ctx *)ctx;
+
+   if (queue_id)
+      return -EINVAL;
+
+   return vrend_renderer_create_fence(dctx->grctx, flags, fence_cookie);
+}
+
 static void vrend_decode_ctx_init_base(struct vrend_decode_ctx *dctx,
                                        uint32_t ctx_id)
 {
@@ -1684,7 +1718,7 @@ static void vrend_decode_ctx_init_base(struct vrend_decode_ctx *dctx,
    ctx->get_blob_done = NULL;
    ctx->submit_cmd = vrend_decode_ctx_submit_cmd;
 
-   ctx->get_fencing_fd = NULL;
-   ctx->retire_fences = NULL;
-   ctx->submit_fence = NULL;
+   ctx->get_fencing_fd = vrend_decode_ctx_get_fencing_fd;
+   ctx->retire_fences = vrend_decode_ctx_retire_fences;
+   ctx->submit_fence = vrend_decode_ctx_submit_fence;
 }
