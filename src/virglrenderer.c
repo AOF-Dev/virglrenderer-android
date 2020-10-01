@@ -165,10 +165,14 @@ void virgl_renderer_fill_caps(uint32_t set, uint32_t version,
    }
 }
 
-static void per_context_fence_retire(UNUSED struct virgl_context *ctx,
-                                     UNUSED uint64_t queue_id,
-                                     UNUSED void *fence_cookie)
+static void per_context_fence_retire(struct virgl_context *ctx,
+                                     uint64_t queue_id,
+                                     void *fence_cookie)
 {
+   state.cbs->write_context_fence(state.cookie,
+                                  ctx->ctx_id,
+                                  queue_id,
+                                  fence_cookie);
 }
 
 int virgl_renderer_context_create_with_flags(uint32_t ctx_id,
@@ -361,6 +365,37 @@ int virgl_renderer_create_fence(int client_fence_id, UNUSED uint32_t ctx_id)
    if (state.vrend_initialized)
       return vrend_renderer_create_ctx0_fence(fence_id);
    return EINVAL;
+}
+
+int virgl_renderer_context_create_fence(uint32_t ctx_id,
+                                        uint32_t flags,
+                                        uint64_t queue_id,
+                                        void *fence_cookie)
+{
+   struct virgl_context *ctx = virgl_context_lookup(ctx_id);
+   if (!ctx)
+      return -EINVAL;
+
+   assert(state.cbs->version >= 3 && state.cbs->write_context_fence);
+   return ctx->submit_fence(ctx, flags, queue_id, fence_cookie);
+}
+
+void virgl_renderer_context_poll(uint32_t ctx_id)
+{
+   struct virgl_context *ctx = virgl_context_lookup(ctx_id);
+   if (!ctx)
+      return;
+
+   ctx->retire_fences(ctx);
+}
+
+int virgl_renderer_context_get_poll_fd(uint32_t ctx_id)
+{
+   struct virgl_context *ctx = virgl_context_lookup(ctx_id);
+   if (!ctx)
+      return -1;
+
+   return ctx->get_fencing_fd(ctx);
 }
 
 void virgl_renderer_force_ctx_0(void)

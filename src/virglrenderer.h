@@ -45,7 +45,11 @@ struct virgl_renderer_gl_ctx_param {
    int minor_ver;
 };
 
+#ifdef VIRGL_RENDERER_UNSTABLE_APIS
+#define VIRGL_RENDERER_CALLBACKS_VERSION 3
+#else
 #define VIRGL_RENDERER_CALLBACKS_VERSION 2
+#endif
 
 struct virgl_renderer_callbacks {
    int version;
@@ -57,6 +61,10 @@ struct virgl_renderer_callbacks {
    int (*make_current)(void *cookie, int scanout_idx, virgl_renderer_gl_context ctx);
 
    int (*get_drm_fd)(void *cookie); /* v2, used with flags & VIRGL_RENDERER_USE_EGL */
+
+#ifdef VIRGL_RENDERER_UNSTABLE_APIS
+   void (*write_context_fence)(void *cookie, uint32_t ctx_id, uint64_t queue_id, void *fence_cookie);
+#endif
 };
 
 /* virtio-gpu compatible interface */
@@ -306,6 +314,14 @@ virgl_renderer_resource_export_blob(uint32_t res_id, uint32_t *fd_type, int *fd)
 
 VIRGL_EXPORT int
 virgl_renderer_export_fence(uint32_t client_fence_id, int *fd);
+
+#define VIRGL_RENDERER_FENCE_FLAG_MERGEABLE      (1 << 0)
+VIRGL_EXPORT int virgl_renderer_context_create_fence(uint32_t ctx_id,
+                                                     uint32_t flags,
+                                                     uint64_t queue_id,
+                                                     void *fence_cookie);
+VIRGL_EXPORT void virgl_renderer_context_poll(uint32_t ctx_id); /* force fences */
+VIRGL_EXPORT int virgl_renderer_context_get_poll_fd(uint32_t ctx_id);
 
 #endif /* VIRGL_RENDERER_UNSTABLE_APIS */
 

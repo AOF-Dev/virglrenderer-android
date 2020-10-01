@@ -9234,6 +9234,10 @@ static bool need_fence_retire_signal_locked(struct vrend_fence *fence)
    if (next->ctx != fence->ctx)
       return true;
 
+   /* not mergeable */
+   if (!(fence->flags & VIRGL_RENDERER_FENCE_FLAG_MERGEABLE))
+      return true;
+
    return false;
 }
 
@@ -11018,7 +11022,8 @@ int vrend_renderer_resource_unmap(struct pipe_resource *pres)
 int vrend_renderer_create_ctx0_fence(uint32_t fence_id)
 {
    void *fence_cookie = (void *)(uintptr_t)fence_id;
-   return vrend_renderer_create_fence(vrend_state.ctx0, 0, fence_cookie);
+   return vrend_renderer_create_fence(vrend_state.ctx0,
+         VIRGL_RENDERER_FENCE_FLAG_MERGEABLE, fence_cookie);
 }
 
 static bool find_ctx0_fence_locked(struct list_head *fence_list,
