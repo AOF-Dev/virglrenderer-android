@@ -869,5 +869,5 @@ int
 virgl_renderer_export_fence(uint32_t client_fence_id, int *fd)
 {
    TRACE_FUNC();
-   return vrend_renderer_export_fence(client_fence_id, fd);
+   return vrend_renderer_export_ctx0_fence(client_fence_id, fd);
 }
