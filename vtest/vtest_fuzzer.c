@@ -136,11 +136,6 @@ static void vtest_fuzzer_run_renderer(int out_fd, struct vtest_input *input,
       if (ret < 0) {
          break;
       }
-
-      /* GL draws are fenced, while possible fence creations are too */
-      if ((header[1] == VCMD_SUBMIT_CMD || header[1] == VCMD_RESOURCE_CREATE ||
-           header[1] == VCMD_RESOURCE_CREATE2))
-         vtest_renderer_create_fence();
    } while (1);
 
    if (context) {

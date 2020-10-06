@@ -93,6 +93,20 @@ struct vtest_renderer {
    struct vtest_context *current_context;
 };
 
+/*
+ * A fence is created after
+ *
+ *  - VCMD_RESOURCE_CREATE
+ *  - VCMD_RESOURCE_CREATE2
+ *  - VCMD_SUBMIT_CMD
+ *
+ * for VCMD_RESOURCE_BUSY_WAIT to wait on.
+ */
+static void vtest_renderer_create_fence(struct vtest_renderer *renderer)
+{
+   virgl_renderer_create_fence(renderer->fence_id++, 0);
+}
+
 static void vtest_write_fence(UNUSED void *cookie, uint32_t fence_id_in)
 {
    struct vtest_renderer *renderer = (struct vtest_renderer*)cookie;
@@ -886,6 +900,9 @@ static int vtest_create_resource_internal(struct vtest_context *ctx,
 
    util_hash_table_set(ctx->resource_table, intptr_to_pointer(res->res_id), res);
 
+   if (cmd_id == VCMD_RESOURCE_CREATE || cmd_id == VCMD_RESOURCE_CREATE2)
+      vtest_renderer_create_fence(&renderer);
+
    return 0;
 }
 
@@ -1060,7 +1077,11 @@ int vtest_submit_cmd(uint32_t length_dw)
    ret = virgl_renderer_submit_cmd(cbuf, ctx->ctx_id, length_dw);
 
    free(cbuf);
-   return ret ? -1 : 0;
+   if (ret)
+      return -1;
+
+   vtest_renderer_create_fence(&renderer);
+   return 0;
 }
 
 struct vtest_transfer_args {
@@ -1435,13 +1456,6 @@ int vtest_resource_busy_wait_nop(UNUSED uint32_t length_dw)
       return ret;
    }
 
-   return 0;
-}
-
-int vtest_renderer_create_fence(void)
-{
-   struct vtest_context *ctx = vtest_get_current_context();
-   virgl_renderer_create_fence(renderer.fence_id++, ctx->ctx_id);
    return 0;
 }
 

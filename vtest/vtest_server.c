@@ -666,11 +666,6 @@ static int vtest_client_dispatch_commands(struct vtest_client *client)
       return VTEST_CLIENT_ERROR_COMMAND_DISPATCH;
    }
 
-   /* GL draws are fenced, while possible fence creations are too */
-   if (header[1] == VCMD_SUBMIT_CMD || header[1] == VCMD_RESOURCE_CREATE ||
-       header[1] == VCMD_RESOURCE_CREATE2)
-      vtest_renderer_create_fence();
-
    return 0;
 }
 
