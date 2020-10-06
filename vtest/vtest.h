@@ -75,7 +75,7 @@ int vtest_buf_read(struct vtest_input *input, void *buf, int size);
 
 int vtest_resource_busy_wait(uint32_t length_dw);
 int vtest_resource_busy_wait_nop(uint32_t length_dw);
-int vtest_poll(void);
+void vtest_poll_resource_busy_wait(void);
 
 int vtest_ping_protocol_version(uint32_t length_dw);
 int vtest_protocol_version(uint32_t length_dw);

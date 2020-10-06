@@ -80,8 +80,8 @@ struct vtest_renderer {
 
    uint32_t max_length;
 
-   int fence_id;
-   int last_fence;
+   int implicit_fence_submitted;
+   int implicit_fence_completed;
 
    struct list_head active_contexts;
    struct list_head free_contexts;
@@ -97,15 +97,15 @@ struct vtest_renderer {
  * VCMD_RESOURCE_BUSY_WAIT is used to wait GPU works (VCMD_SUBMIT_CMD) or CPU
  * works (VCMD_TRANSFER_GET2).  A fence is needed only for GPU works.
  */
-static void vtest_renderer_create_fence(struct vtest_renderer *renderer)
+static void vtest_create_implicit_fence(struct vtest_renderer *renderer)
 {
-   virgl_renderer_create_fence(renderer->fence_id++, 0);
+   virgl_renderer_create_fence(++renderer->implicit_fence_submitted, 0);
 }
 
-static void vtest_write_fence(UNUSED void *cookie, uint32_t fence_id_in)
+static void vtest_write_implicit_fence(UNUSED void *cookie, uint32_t fence_id_in)
 {
    struct vtest_renderer *renderer = (struct vtest_renderer*)cookie;
-   renderer->last_fence = fence_id_in;
+   renderer->implicit_fence_completed = fence_id_in;
 }
 
 static int vtest_get_drm_fd(void *cookie)
@@ -123,14 +123,13 @@ static int vtest_get_drm_fd(void *cookie)
 
 static struct virgl_renderer_callbacks renderer_cbs = {
    .version = 2,
-   .write_fence = vtest_write_fence,
+   .write_fence = vtest_write_implicit_fence,
    .get_drm_fd = vtest_get_drm_fd
 };
 
 
 static struct vtest_renderer renderer = {
    .max_length = UINT_MAX,
-   .fence_id = 1,
    .next_context_id = 1,
    .next_resource_id = 1,
 };
@@ -1072,7 +1071,7 @@ int vtest_submit_cmd(uint32_t length_dw)
    if (ret)
       return -1;
 
-   vtest_renderer_create_fence(&renderer);
+   vtest_create_implicit_fence(&renderer);
    return 0;
 }
 
@@ -1392,7 +1391,8 @@ int vtest_resource_busy_wait(UNUSED uint32_t length_dw)
    flags = bw_buf[VCMD_BUSY_WAIT_FLAGS];
 
    do {
-      busy = renderer.last_fence != (renderer.fence_id - 1);
+      busy = renderer.implicit_fence_completed !=
+             renderer.implicit_fence_submitted;
       if (!busy || !(flags & VCMD_BUSY_WAIT_FLAG_WAIT))
          break;
 
@@ -1445,10 +1445,10 @@ int vtest_resource_busy_wait_nop(UNUSED uint32_t length_dw)
    return 0;
 }
 
-int vtest_poll(void)
+void vtest_poll_resource_busy_wait(void)
 {
+   /* poll the implicit fences */
    virgl_renderer_poll();
-   return 0;
 }
 
 void vtest_set_max_length(uint32_t length)

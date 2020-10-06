@@ -636,12 +636,12 @@ static int vtest_client_dispatch_commands(struct vtest_client *client)
          return VTEST_CLIENT_ERROR_CONTEXT_FAILED;
       }
       printf("%s: client context created.\n", __func__);
-      vtest_poll();
+      vtest_poll_resource_busy_wait();
 
       return 0;
    }
 
-   vtest_poll();
+   vtest_poll_resource_busy_wait();
    if (header[1] <= 0 || header[1] >= ARRAY_SIZE(vtest_commands)) {
       return VTEST_CLIENT_ERROR_COMMAND_ID;
    }

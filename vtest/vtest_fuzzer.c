@@ -119,11 +119,11 @@ static void vtest_fuzzer_run_renderer(int out_fd, struct vtest_input *input,
             break;
          }
          vtest_set_current_context(context);
-         vtest_poll();
+         vtest_poll_resource_busy_wait();
          continue;
       }
 
-      vtest_poll();
+      vtest_poll_resource_busy_wait();
       if (header[1] <= 0 || header[1] >= ARRAY_SIZE(vtest_commands)) {
          break;
       }
