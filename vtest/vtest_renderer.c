@@ -94,13 +94,8 @@ struct vtest_renderer {
 };
 
 /*
- * A fence is created after
- *
- *  - VCMD_RESOURCE_CREATE
- *  - VCMD_RESOURCE_CREATE2
- *  - VCMD_SUBMIT_CMD
- *
- * for VCMD_RESOURCE_BUSY_WAIT to wait on.
+ * VCMD_RESOURCE_BUSY_WAIT is used to wait GPU works (VCMD_SUBMIT_CMD) or CPU
+ * works (VCMD_TRANSFER_GET2).  A fence is needed only for GPU works.
  */
 static void vtest_renderer_create_fence(struct vtest_renderer *renderer)
 {
@@ -899,9 +894,6 @@ static int vtest_create_resource_internal(struct vtest_context *ctx,
    }
 
    util_hash_table_set(ctx->resource_table, intptr_to_pointer(res->res_id), res);
-
-   if (cmd_id == VCMD_RESOURCE_CREATE || cmd_id == VCMD_RESOURCE_CREATE2)
-      vtest_renderer_create_fence(&renderer);
 
    return 0;
 }
