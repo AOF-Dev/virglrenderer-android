@@ -74,6 +74,7 @@ int vtest_block_read(struct vtest_input *input, void *buf, int size);
 int vtest_buf_read(struct vtest_input *input, void *buf, int size);
 
 int vtest_resource_busy_wait(uint32_t length_dw);
+int vtest_resource_busy_wait_nop(uint32_t length_dw);
 int vtest_renderer_create_fence(void);
 int vtest_poll(void);
 

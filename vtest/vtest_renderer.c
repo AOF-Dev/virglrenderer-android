@@ -1414,6 +1414,30 @@ int vtest_resource_busy_wait(UNUSED uint32_t length_dw)
    return 0;
 }
 
+int vtest_resource_busy_wait_nop(UNUSED uint32_t length_dw)
+{
+   struct vtest_context *ctx = vtest_get_current_context();
+   uint32_t bw_buf[VCMD_BUSY_WAIT_SIZE];
+   uint32_t reply_buf[VTEST_HDR_SIZE + 1];
+   int ret;
+
+   ret = ctx->input->read(ctx->input, &bw_buf, sizeof(bw_buf));
+   if (ret != sizeof(bw_buf)) {
+      return -1;
+   }
+
+   reply_buf[VTEST_CMD_LEN] = 1;
+   reply_buf[VTEST_CMD_ID] = VCMD_RESOURCE_BUSY_WAIT;
+   reply_buf[VTEST_CMD_DATA_START] = 0;
+
+   ret = vtest_block_write(ctx->out_fd, reply_buf, sizeof(reply_buf));
+   if (ret < 0) {
+      return ret;
+   }
+
+   return 0;
+}
+
 int vtest_renderer_create_fence(void)
 {
    struct vtest_context *ctx = vtest_get_current_context();
