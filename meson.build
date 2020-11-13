@@ -23,7 +23,7 @@
 
 project(
    'virglrenderer', 'c',
-   version: '0.8.2',
+   version: '0.9.0',
    license : 'MIT',
    meson_version : '>= 0.46',
    default_options : ['buildtype=release', 'b_ndebug=if-release',
@@ -39,8 +39,8 @@ project(
 #    and set revision and interface_age to zero
 
 binary_age    = 1
-interface_age = 4
-revision      = 2
+interface_age = 5
+revision      = 3
 
 cc = meson.get_compiler('c')
 
