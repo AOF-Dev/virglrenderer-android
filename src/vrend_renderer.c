@@ -6691,7 +6691,7 @@ static void vrend_create_buffer(struct vrend_resource *gr, uint32_t width, uint3
    glBindBufferARB(gr->target, gr->id);
 
    if (buffer_storage_flags) {
-      if (has_feature(feat_arb_buffer_storage)) {
+      if (has_feature(feat_arb_buffer_storage) && !vrend_state.use_external_blob) {
          glBufferStorage(gr->target, width, NULL, buffer_storage_flags);
          gr->map_info = vrend_state.inferred_gl_caching_type;
       }
