@@ -131,7 +131,7 @@ RUN git clone https://chromium.googlesource.com/chromiumos/platform/minigbm \
     && make CPPFLAGS="-DDRV_I915" DRV_I915=1 install -j$(nproc)
 
 # New libepoxy has EGL_KHR_DEBUG entry points needed by crosvm.
-ARG LIBEPOXY_COMMIT=master
+ARG LIBEPOXY_COMMIT=1.5.5
 RUN git clone https://github.com/anholt/libepoxy.git \
     && cd libepoxy \
     && git checkout $LIBEPOXY_COMMIT \
