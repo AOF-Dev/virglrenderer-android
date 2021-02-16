@@ -196,7 +196,11 @@ if [ "x$debug" = "xyes" ]; then
    export EGL_DEBUG=debug
 fi
 
-crosvm run \
+
+if [ -e /wd/crosvm-debug.cmd ]; then
+    gdb -x /wd/crosvm-debug.cmd
+else
+    crosvm run \
    --gpu gles=false\
    -m 4096 \
    -c 4 \
@@ -209,6 +213,7 @@ crosvm run \
    --host_ip 192.168.200.1 --netmask 255.255.255.0 --mac AA:BB:CC:00:00:12 \
    -p "root=/dev/ram0 rdinit=/init.sh ip=192.168.200.2::192.168.200.1:255.255.255.0:crosvm:eth0 nohz=off clocksource=kvm-clock" \
    /vmlinux
+fi
 
 rm -f /traces-db/current_trace
 rm -f /traces-db/command
