@@ -6064,6 +6064,8 @@ static bool use_integer() {
       return true;
 
    const char * a = (const char *) glGetString(GL_VENDOR);
+   if (!a)
+       return false;
    if (strcmp(a, "ARM") == 0)
       return true;
    return false;
