@@ -30,6 +30,8 @@ sed -i '/pool/s/^/#/' /etc/chrony/chrony.conf
 echo refclock PHC /dev/ptp0 poll 1 dpoll -2 offset 0 >> /etc/chrony/chrony.conf
 echo cmdport 0 >> /etc/chrony/chrony.conf
 echo bindcmdaddress / >> /etc/chrony/chrony.conf
+
+mkdir -p /run/chrony
 time chronyd -q   # Initial synchronization, will take some time
 chronyd      # Keep clocks in sync
 

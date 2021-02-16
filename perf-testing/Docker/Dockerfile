@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-FROM debian:buster
+FROM debian:bullseye
 LABEL description="Test crosvm using a command like the following: \
 docker run --privileged -v /dev/log:/dev/log -v <path to crosvm>:/platform/crosvm:ro <crosvm base image>"
 
@@ -12,19 +12,17 @@ ARG GROUP_ID
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates gnupg wget && \
-    echo 'deb https://deb.debian.org/debian buster-backports main' >> /etc/apt/sources.list && \
-    echo 'deb-src https://deb.debian.org/debian buster main' >> /etc/apt/sources.list && \
-    echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster-9 main' >> /etc/apt/sources.list && \
+    echo 'deb-src https://deb.debian.org/debian bullseye main' >> /etc/apt/sources.list && \
     cat /etc/apt/sources.list && \
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
     apt-get update && \
     apt-get build-dep -y mesa && \
     apt-get install -y --no-install-recommends ca-certificates \
                                                python3-setuptools \
-                                               llvm-9-dev \
+                                               llvm-dev \
                                                libxcb-shm0-dev \
                                                libelf-dev \
                                                cmake \
+                                               chrony \
                                                bc \
                                                flex \
                                                bison \
@@ -43,6 +41,7 @@ RUN apt-get update && \
                                                libcap-dev \
                                                libdbus-1-dev \
                                                libegl1-mesa-dev \
+                                               libepoxy-dev \
                                                libfdt-dev \
                                                libgl1-mesa-dev \
                                                libgles2-mesa-dev \
@@ -58,7 +57,6 @@ RUN apt-get update && \
                                                protobuf-compiler \
                                                python \
                                                libtinfo5 \
-                                               g++-7 \
                                                python3-protobuf \
                                                clang \
                                                iptables \
@@ -70,8 +68,7 @@ RUN apt-get update && \
                                                libprotobuf-dev \
                                                libdocopt-dev \
                                                && \
-    apt-get -y build-dep intel-gpu-tools && \
-    apt-get remove -y llvm-7-dev llvm-7 llvm-7-runtime
+    apt-get -y build-dep intel-gpu-tools
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
@@ -129,15 +126,6 @@ RUN git clone https://chromium.googlesource.com/chromiumos/platform/minigbm \
     && cd minigbm \
     && sed 's/-Wall/-Wno-maybe-uninitialized/g' -i Makefile \
     && make CPPFLAGS="-DDRV_I915" DRV_I915=1 install -j$(nproc)
-
-# New libepoxy has EGL_KHR_DEBUG entry points needed by crosvm.
-ARG LIBEPOXY_COMMIT=1.5.5
-RUN git clone https://github.com/anholt/libepoxy.git \
-    && cd libepoxy \
-    && git checkout $LIBEPOXY_COMMIT \
-    && mkdir build \
-    && meson build -Dtests=false -Dlibdir=lib \
-    && ninja -C build/ install
 
 RUN git clone https://gitlab.freedesktop.org/virgl/virglrenderer.git \
     && cd virglrenderer \
@@ -224,12 +212,14 @@ RUN export uid=$USER_ID gid=$GROUP_ID && \
     echo "chronos:x:${uid}:" >> /etc/group && \
     chown ${uid}:${gid} -R /home/chronos
 
-ENV EXTRA_PACKAGES="sudo,strace,libxcb-dri2-0,libxcb-dri3-0,libx11-xcb1,libxcb-xfixes0,libxcb-present0,libxcb-sync1,libxshmfence1,libx11-6,gdb,sysvinit-core,libwayland-client0,libwayland-server0,time,chrony,inetutils-ping,dnsutils,libpng16-16,libprocps7,gdb,valgrind"
+
+#crony didn't install cleanly when using --include, so we add it by using an extra apt install
+
+ENV EXTRA_PACKAGES="sudo,strace,libxcb-dri2-0,libxcb-dri3-0,libx11-xcb1,libxcb-xfixes0,libxcb-present0,libxcb-sync1,libxshmfence1,libx11-6,sysvinit-core,libwayland-client0,libwayland-server0,time,inetutils-ping,dnsutils,libpng16-16,libprocps8,valgrind,libsensors5,python3,wget,gnupg,ca-certificates,llvm-dev,chrony"
 
 RUN ulimit -n 1024 && \
-    debootstrap --variant=minbase --components main,contrib,non-free --include=$EXTRA_PACKAGES buster /rootfs http://deb.debian.org/debian && \
-    chroot /rootfs /bin/bash -c "echo 'deb http://deb.debian.org/debian buster-backports main' >>/etc/apt/sources.list && apt-get update && apt-get install -y --no-install-recommends libsensors5 python3 wget gnupg ca-certificates" && \
-    chroot /rootfs /bin/bash -c "echo 'deb https://apt.llvm.org/buster/ llvm-toolchain-buster-9 main' >/etc/apt/sources.list.d/llvm9.list && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - &&  apt-get update && apt-get install -y libllvm9" && \
+    debootstrap --variant=minbase --components main,contrib,non-free --include=$EXTRA_PACKAGES  bullseye /rootfs http://deb.debian.org/debian && \
+    chroot /rootfs /bin/bash -c "apt install -yy gdb" && \
     chroot /rootfs /bin/bash -c "dpkg-query -Wf '\${Installed-Size}\t\${Package}\n' | sort -n " && \
     chroot /rootfs /bin/bash -c "useradd -u 1001 -r -d / -s /sbin/nologin -c 'crossvm image user' perfetto" 
 
