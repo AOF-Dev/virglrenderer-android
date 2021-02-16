@@ -240,7 +240,7 @@ RUN mkdir -p kernel && \
 
 # Need an unreleased version of Waffle for surfaceless support in apitrace
 # Replace this build with the Debian package once that's possible
-ENV WAFFLE_VERSION="e3c995d9a2693b687501715b6550619922346089"
+ENV WAFFLE_VERSION="b6d94483694b6889a8567b6bd748f7baad527df4"
 RUN git clone https://gitlab.freedesktop.org/mesa/waffle.git --single-branch --no-checkout /waffle && \
   cd /waffle && \
   git checkout "$WAFFLE_VERSION" && \
