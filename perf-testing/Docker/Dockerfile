@@ -230,7 +230,7 @@ RUN cd /rootfs && \
 
 COPY perf-testing/Docker/x86_64.config /tmp/.
 RUN mkdir -p kernel && \
-  wget -O- https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.10.5.tar.xz | tar -xJ --strip-components=1 -C kernel && \
+  wget -O- https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.10.16.tar.xz | tar -xJ --strip-components=1 -C kernel && \
   cd kernel && \
   ./scripts/kconfig/merge_config.sh arch/x86/configs/x86_64_defconfig /tmp/x86_64.config && \
   make -j12 vmlinux && \
