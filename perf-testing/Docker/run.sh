@@ -109,17 +109,19 @@ if [ ! -f build/build.ninja ]; then
    meson build/ \
       -Dprefix=/usr/local \
       -Dlibdir=lib \
-      -Dplatforms=glx,egl \
+      -Dplatforms=egl \
       -Dminigbm_allocation=true \
-      -Dtracing=perfetto
+      -Dtracing=perfetto \
+      -Dbuildtype=debugoptimized
 else    
    pushd build
    meson configure \
       -Dprefix=/usr/local \
       -Dlibdir=lib \
-      -Dplatforms=glx,egl \
+      -Dplatforms=egl \
       -Dminigbm_allocation=true \
-      -Dtracing=perfetto
+      -Dtracing=perfetto \
+      -Dbuildtype=debugoptimized
    popd
 fi    
 ninja -C build/ install
