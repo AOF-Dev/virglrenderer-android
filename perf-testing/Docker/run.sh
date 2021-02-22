@@ -78,6 +78,7 @@ if [ ! -f build/build.ninja ]; then
       -Dgallium-va=false \
       -Dvulkan-drivers=[] \
       -Dvalgrind=false \
+      -Dtracing=perfetto \
       -Dlibdir=lib
 else    
    pushd build
@@ -94,6 +95,7 @@ else
       -Dgallium-va=false \
       -Dvulkan-drivers=[] \
       -Dvalgrind=false \
+      -Dtracing=perfetto \
       -Dlibdir=lib
    popd
 fi 
