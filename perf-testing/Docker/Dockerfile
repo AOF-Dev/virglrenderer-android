@@ -262,8 +262,9 @@ RUN git clone https://gitlab.freedesktop.org/tomeu/apitrace.git --single-branch 
 
 ENV GN_ARGS="is_debug=false use_custom_libcxx=false"
 ENV CFG=linux_trusty-gcc7-x86_64-release
-RUN git clone --single-branch -b virgl https://gitlab.freedesktop.org/tomeu/perfetto.git && \
+RUN git clone https://android.googlesource.com/platform/external/perfetto && \
   cd perfetto && \
+  git checkout v12.1 && \
   python3 tools/install-build-deps && \
   python3 tools/install-build-deps --ui && \
   tools/gn gen out/dist --args="${GN_ARGS}" --check && \
