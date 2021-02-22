@@ -49,9 +49,10 @@ and
 ```
 will work equally. 
 
-At the moment of writing, the branch perfetto-tracing is needed for mesa, 
-and the for virglrenderer at least commit 7db2faa354 is needed, 
-so these projects emit the required traces.
+At the moment of writing, the branch perfetto-tracing is needed for mesa at
+commit ec4277aea63cf3, and the for virglrenderer at least commit
+"perf: compile mesa with perfeto support" is needed so that these projects
+emit the required traces.
 
 The perfetto traces will be saved to the a subdirectory of the traces-db checkout 
 directory with a name based on the api trace passed in with the --trace parameter. 
