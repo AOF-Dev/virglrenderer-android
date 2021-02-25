@@ -869,12 +869,23 @@ static boolean format_compressed_compressed_copy_compatible(enum virgl_formats s
 }
 
 boolean format_is_copy_compatible(enum virgl_formats src, enum virgl_formats dst,
-                                  boolean allow_compressed)
+                                  unsigned int flags)
 {
    int r;
 
-   if (src == dst)
+   if (src == dst) {
+      /* When Mesa imports dma_buf VIRGL_FORMAT_B8G8R8X8_UNORM/DRM|GBM_FORMAT_XRGB8888
+       * it uses internal format GL_RGB8.
+       * But when virglrenderer creates VIRGL_FORMAT_B8G8R8X8_UNORM texture, it
+       * uses internal format GL_BGRA_EXT.
+       * So the formats do not match when Mesa checks them internally.
+       */
+      if (flags & VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE &&
+          (src == VIRGL_FORMAT_B8G8R8X8_UNORM ||
+           src == VIRGL_FORMAT_B8G8R8X8_UNORM_EMULATED))
+         return false;
       return true;
+   }
 
    if (util_format_is_plain(src) && util_format_is_plain(dst))  {
       const struct util_format_description *src_desc = util_format_description(src);
@@ -882,7 +893,7 @@ boolean format_is_copy_compatible(enum virgl_formats src, enum virgl_formats dst
       return util_is_format_compatible(src_desc, dst_desc);
    }
 
-   if (!allow_compressed)
+   if (!(flags & VREND_COPY_COMPAT_FLAG_ALLOW_COMPRESSED))
       return false;
 
    /* compressed-uncompressed */

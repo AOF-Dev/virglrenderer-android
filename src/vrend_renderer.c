@@ -8697,6 +8697,7 @@ void vrend_renderer_resource_copy_region(struct vrend_context *ctx,
    struct vrend_resource *src_res, *dst_res;
    GLbitfield glmask = 0;
    GLint sy1, sy2, dy1, dy2;
+   unsigned int comp_flags;
 
    if (ctx->in_error)
       return;
@@ -8731,8 +8732,14 @@ void vrend_renderer_resource_copy_region(struct vrend_context *ctx,
       return;
    }
 
+   comp_flags = VREND_COPY_COMPAT_FLAG_ALLOW_COMPRESSED;
+   if (src_res->egl_image)
+      comp_flags |= VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE;
+   if (dst_res->egl_image)
+      comp_flags ^= VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE;
+
    if (has_feature(feat_copy_image) &&
-       format_is_copy_compatible(src_res->base.format,dst_res->base.format, true) &&
+       format_is_copy_compatible(src_res->base.format,dst_res->base.format, comp_flags) &&
        src_res->base.nr_samples == dst_res->base.nr_samples) {
       VREND_DEBUG(dbg_copy_resource, ctx, "COPY_REGION: use glCopyImageSubData\n");
       vrend_copy_sub_image(src_res, dst_res, src_level, src_box,
@@ -9123,6 +9130,7 @@ void vrend_renderer_blit(struct vrend_context *ctx,
                          uint32_t dst_handle, uint32_t src_handle,
                          const struct pipe_blit_info *info)
 {
+   unsigned int comp_flags = 0;
    struct vrend_resource *src_res, *dst_res;
    src_res = vrend_renderer_ctx_res_lookup(ctx, src_handle);
    dst_res = vrend_renderer_ctx_res_lookup(ctx, dst_handle);
@@ -9170,6 +9178,11 @@ void vrend_renderer_blit(struct vrend_context *ctx,
                                    info->dst.box.width, info->dst.box.height, info->dst.box.depth,
                                    info->dst.level);
 
+   if (src_res->egl_image)
+      comp_flags |= VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE;
+   if (dst_res->egl_image)
+      comp_flags ^= VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE;
+
    /* The Gallium blit function can be called for a general blit that may
     * scale, convert the data, and apply some rander states, or it is called via
     * glCopyImageSubData. If the src or the dst image are equal, or the two
@@ -9179,7 +9192,7 @@ void vrend_renderer_blit(struct vrend_context *ctx,
     * normal blit. */
    if (has_feature(feat_copy_image) &&
        (!info->render_condition_enable || !ctx->sub->cond_render_gl_mode) &&
-       format_is_copy_compatible(info->src.format,info->dst.format, false) &&
+       format_is_copy_compatible(info->src.format,info->dst.format, comp_flags) &&
        !info->scissor_enable && (info->filter == PIPE_TEX_FILTER_NEAREST) &&
        !info->alpha_blend && (info->mask == PIPE_MASK_RGBA) &&
        src_res->base.nr_samples == dst_res->base.nr_samples &&

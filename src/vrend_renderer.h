@@ -464,8 +464,11 @@ void vrend_fb_bind_texture(struct vrend_resource *res,
                            int idx,
                            uint32_t level, uint32_t layer);
 bool vrend_format_is_emulated_alpha(enum virgl_formats format);
+
+#define VREND_COPY_COMPAT_FLAG_ALLOW_COMPRESSED (1u << 0)
+#define VREND_COPY_COMPAT_FLAG_ONE_IS_EGL_IMAGE (1u << 1)
 boolean format_is_copy_compatible(enum virgl_formats src, enum virgl_formats dst,
-                                  boolean allow_compressed);
+                                  unsigned int flags);
 
 /* blitter interface */
 void vrend_renderer_blit_gl(struct vrend_context *ctx,
