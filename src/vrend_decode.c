@@ -1537,6 +1537,19 @@ static int vrend_decode_ctx_get_blob(struct virgl_context *ctx,
    return 0;
 }
 
+static int vrend_decode_get_memory_info(struct vrend_context *ctx, const uint32_t *buf, uint32_t length)
+{
+   TRACE_FUNC();
+   if (length != 1)
+      return EINVAL;
+
+   uint32_t res_handle = get_buf_entry(buf, 1);
+
+   vrend_renderer_get_meminfo(ctx, res_handle);
+
+   return 0;
+}
+
 typedef int (*vrend_decode_callback)(struct vrend_context *ctx, const uint32_t *buf, uint32_t length);
 
 static int vrend_decode_dummy(struct vrend_context *ctx, const uint32_t *buf, uint32_t length)
@@ -1598,6 +1611,7 @@ static const vrend_decode_callback decode_table[VIRGL_MAX_COMMANDS] = {
    [VIRGL_CCMD_SET_TWEAKS] = vrend_decode_set_tweaks,
    [VIRGL_CCMD_PIPE_RESOURCE_CREATE] = vrend_decode_pipe_resource_create,
    [VIRGL_CCMD_PIPE_RESOURCE_SET_TYPE] = vrend_decode_pipe_resource_set_type,
+   [VIRGL_CCMD_GET_MEMORY_INFO] = vrend_decode_get_memory_info,
 };
 
 static int vrend_decode_ctx_submit_cmd(struct virgl_context *ctx,

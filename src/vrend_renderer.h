@@ -515,4 +515,5 @@ int vrend_renderer_resource_map(struct pipe_resource *pres, void **map, uint64_t
 
 int vrend_renderer_resource_unmap(struct pipe_resource *pres);
 
+void vrend_renderer_get_meminfo(struct vrend_context *ctx, uint32_t res_handle);
 #endif

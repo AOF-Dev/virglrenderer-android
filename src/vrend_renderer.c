@@ -55,6 +55,7 @@
 #include "virgl_resource.h"
 #include "virglrenderer.h"
 #include "virglrenderer_hw.h"
+#include "virgl_protocol.h"
 
 #include "tgsi/tgsi_text.h"
 
@@ -114,6 +115,7 @@ enum features_id
    feat_arb_robustness,
    feat_arb_buffer_storage,
    feat_arrays_of_arrays,
+   feat_ati_meminfo,
    feat_atomic_counters,
    feat_base_instance,
    feat_barrier,
@@ -158,6 +160,7 @@ enum features_id
    feat_multi_draw_indirect,
    feat_nv_conditional_render,
    feat_nv_prim_restart,
+   feat_nvx_gpu_memory_info,
    feat_polygon_offset_clamp,
    feat_occlusion_query,
    feat_occlusion_query_boolean,
@@ -211,6 +214,7 @@ static const  struct {
    FEAT(arb_robustness, UNAVAIL, UNAVAIL,  "GL_ARB_robustness" ),
    FEAT(arb_buffer_storage, 44, UNAVAIL, "GL_ARB_buffer_storage", "GL_EXT_buffer_storage"),
    FEAT(arrays_of_arrays, 43, 31, "GL_ARB_arrays_of_arrays"),
+   FEAT(ati_meminfo, UNAVAIL, UNAVAIL, "GL_ATI_meminfo" ),
    FEAT(atomic_counters, 42, 31,  "GL_ARB_shader_atomic_counters" ),
    FEAT(base_instance, 42, UNAVAIL,  "GL_ARB_base_instance", "GL_EXT_base_instance" ),
    FEAT(barrier, 42, 31, NULL),
@@ -255,6 +259,7 @@ static const  struct {
    FEAT(multi_draw_indirect, 43, UNAVAIL,  "GL_ARB_multi_draw_indirect", "GL_EXT_multi_draw_indirect" ),
    FEAT(nv_conditional_render, UNAVAIL, UNAVAIL,  "GL_NV_conditional_render" ),
    FEAT(nv_prim_restart, UNAVAIL, UNAVAIL,  "GL_NV_primitive_restart" ),
+   FEAT(nvx_gpu_memory_info, UNAVAIL, UNAVAIL, "GL_NVX_gpu_memory_info" ),
    FEAT(polygon_offset_clamp, 46, UNAVAIL,  "GL_ARB_polygon_offset_clamp", "GL_EXT_polygon_offset_clamp"),
    FEAT(occlusion_query, 15, UNAVAIL, "GL_ARB_occlusion_query"),
    FEAT(occlusion_query_boolean, 33, 30, "GL_EXT_occlusion_query_boolean", "GL_ARB_occlusion_query2"),
@@ -10322,6 +10327,11 @@ static void vrend_renderer_fill_caps_v2(int gl_ver, int gles_ver,  union virgl_c
       caps->v2.capability_bits_v2 |= VIRGL_CAP_V2_VIDEO_MEMORY;
       caps->v2.max_video_memory = video_memory;
    }
+
+   if (has_feature(feat_ati_meminfo) || has_feature(feat_nvx_gpu_memory_info)) {
+      caps->v2.capability_bits_v2 |= VIRGL_CAP_V2_MEMINFO;
+   }
+
 }
 
 void vrend_renderer_fill_caps(uint32_t set, uint32_t version,
@@ -10992,4 +11002,33 @@ int vrend_renderer_export_fence(uint32_t fence_id, int* out_fd) {
    }
 #endif
    return -EINVAL;
+}
+
+void vrend_renderer_get_meminfo(struct vrend_context *ctx, uint32_t res_handle)
+{
+   struct vrend_resource *res;
+   struct virgl_memory_info *info;
+
+   res = vrend_renderer_ctx_res_lookup(ctx, res_handle);
+
+   info = (struct virgl_memory_info *)res->iov->iov_base;
+
+   if (has_feature(feat_nvx_gpu_memory_info)) {
+         int i;
+         glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &i);
+         info->total_device_memory = i;
+         glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &i);
+         info->total_staging_memory = i - info->total_device_memory;
+         glGetIntegerv(GL_GPU_MEMORY_INFO_EVICTION_COUNT_NVX, &i);
+         info->nr_device_memory_evictions = i;
+         glGetIntegerv(GL_GPU_MEMORY_INFO_EVICTED_MEMORY_NVX, &i);
+         info->device_memory_evicted = i;
+      }
+
+   if (has_feature(feat_ati_meminfo)) {
+      int i[4];
+      glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, i);
+      info->avail_device_memory = i[0];
+      info->avail_staging_memory = i[2];
+   }
 }
