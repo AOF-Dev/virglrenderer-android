@@ -83,10 +83,19 @@ enum util_format_layout {
     */
    UTIL_FORMAT_LAYOUT_BPTC = 7,
 
+   UTIL_FORMAT_LAYOUT_ASTC = 8,
+
+   UTIL_FORMAT_LAYOUT_ATC = 9,
+
+   /** Formats with 2 or more planes. */
+   UTIL_FORMAT_LAYOUT_PLANAR2 = 10,
+   UTIL_FORMAT_LAYOUT_PLANAR3 = 11,
+
+   UTIL_FORMAT_LAYOUT_FXT1 = 12,
    /**
     * Everything else that doesn't fit in any of the above layouts.
     */
-   UTIL_FORMAT_LAYOUT_OTHER = 8
+   UTIL_FORMAT_LAYOUT_OTHER = 13,
 };
 
 
@@ -299,6 +308,9 @@ util_format_is_compressed(enum pipe_format format)
    case UTIL_FORMAT_LAYOUT_RGTC:
    case UTIL_FORMAT_LAYOUT_ETC:
    case UTIL_FORMAT_LAYOUT_BPTC:
+   case UTIL_FORMAT_LAYOUT_ASTC:
+   case UTIL_FORMAT_LAYOUT_ATC:
+   case UTIL_FORMAT_LAYOUT_FXT1:
       /* XXX add other formats in the future */
       return TRUE;
    default:

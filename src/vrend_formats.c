@@ -246,6 +246,36 @@ static struct vrend_format_table etc2_formats[] = {
   {VIRGL_FORMAT_ETC2_RG11_UNORM, GL_COMPRESSED_RG11_EAC, GL_RG, GL_UNSIGNED_BYTE, NO_SWIZZLE},
   {VIRGL_FORMAT_ETC2_RG11_SNORM, GL_COMPRESSED_SIGNED_RG11_EAC, GL_RG, GL_BYTE, NO_SWIZZLE},
 };
+static struct vrend_format_table astc_formats[] = {
+   {VIRGL_FORMAT_ASTC_4x4, GL_COMPRESSED_RGBA_ASTC_4x4, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_5x4, GL_COMPRESSED_RGBA_ASTC_5x4, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_5x5, GL_COMPRESSED_RGBA_ASTC_5x5, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_6x5, GL_COMPRESSED_RGBA_ASTC_6x5, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_6x6, GL_COMPRESSED_RGBA_ASTC_6x6, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_8x5, GL_COMPRESSED_RGBA_ASTC_8x5, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_8x6, GL_COMPRESSED_RGBA_ASTC_8x6, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_8x8, GL_COMPRESSED_RGBA_ASTC_8x8, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_10x5, GL_COMPRESSED_RGBA_ASTC_10x5, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_10x6, GL_COMPRESSED_RGBA_ASTC_10x6, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_10x8, GL_COMPRESSED_RGBA_ASTC_10x8, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_10x10, GL_COMPRESSED_RGBA_ASTC_10x10, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_12x10, GL_COMPRESSED_RGBA_ASTC_12x10, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_12x12, GL_COMPRESSED_RGBA_ASTC_12x12, GL_RGBA, GL_UNSIGNED_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_4x4_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_5x4_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_5x5_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_6x5_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_6x6_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_8x5_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_8x6_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_8x8_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_10x5_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_10x6_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_10x8_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_10x10_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_12x10_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+   {VIRGL_FORMAT_ASTC_12x12_SRGB, GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12, GL_RGBA, GL_BYTE, NO_SWIZZLE },
+};
 
 static struct vrend_format_table rgtc_formats[] = {
   { VIRGL_FORMAT_RGTC1_UNORM, GL_COMPRESSED_RED_RGTC1, GL_RED, GL_UNSIGNED_BYTE, NO_SWIZZLE },
@@ -433,6 +463,10 @@ static void vrend_add_formats(struct vrend_format_table *table, int num_entries)
              vrend_insert_format(&table[i], VIRGL_BIND_SAMPLER_VIEW, flags);
           continue;
 
+         case UTIL_FORMAT_LAYOUT_ASTC:
+               if(epoxy_has_gl_extension("GL_KHR_texture_compression_astc_ldr"))
+                   vrend_insert_format(&table[i], VIRGL_BIND_SAMPLER_VIEW, flags);
+          continue;
        default:
           ;/* do logic below */
        }
@@ -552,6 +586,7 @@ void vrend_build_format_list_common(void)
 
   /* compressed */
   add_formats(etc2_formats);
+  add_formats(astc_formats);
   add_formats(rgtc_formats);
   add_formats(dxtn_formats);
   add_formats(dxtn_srgb_formats);
@@ -712,6 +747,7 @@ unsigned vrend_renderer_query_multisample_caps(unsigned max_samples, struct virg
 static int format_uncompressed_compressed_copy_compatible(enum virgl_formats src,
                                                           enum virgl_formats dst)
 {
+
    switch (src) {
    case VIRGL_FORMAT_R32G32B32A32_UINT:
    case VIRGL_FORMAT_R32G32B32A32_SINT:
@@ -734,6 +770,34 @@ static int format_uncompressed_compressed_copy_compatible(enum virgl_formats src
       case VIRGL_FORMAT_ETC2_RG11_UNORM:
       case VIRGL_FORMAT_ETC2_RG11_SNORM:
          return 1;
+      case VIRGL_FORMAT_ASTC_4x4:
+      case VIRGL_FORMAT_ASTC_5x4:
+      case VIRGL_FORMAT_ASTC_5x5:
+      case VIRGL_FORMAT_ASTC_6x5:
+      case VIRGL_FORMAT_ASTC_6x6:
+      case VIRGL_FORMAT_ASTC_8x5:
+      case VIRGL_FORMAT_ASTC_8x6:
+      case VIRGL_FORMAT_ASTC_8x8:
+      case VIRGL_FORMAT_ASTC_10x5:
+      case VIRGL_FORMAT_ASTC_10x6:
+      case VIRGL_FORMAT_ASTC_10x8:
+      case VIRGL_FORMAT_ASTC_10x10:
+      case VIRGL_FORMAT_ASTC_12x10:
+      case VIRGL_FORMAT_ASTC_12x12:
+      case VIRGL_FORMAT_ASTC_4x4_SRGB:
+      case VIRGL_FORMAT_ASTC_5x5_SRGB:
+      case VIRGL_FORMAT_ASTC_6x5_SRGB:
+      case VIRGL_FORMAT_ASTC_6x6_SRGB:
+      case VIRGL_FORMAT_ASTC_8x5_SRGB:
+      case VIRGL_FORMAT_ASTC_8x6_SRGB:
+      case VIRGL_FORMAT_ASTC_8x8_SRGB:
+      case VIRGL_FORMAT_ASTC_10x5_SRGB:
+      case VIRGL_FORMAT_ASTC_10x6_SRGB:
+      case VIRGL_FORMAT_ASTC_10x8_SRGB:
+      case VIRGL_FORMAT_ASTC_10x10_SRGB:
+      case VIRGL_FORMAT_ASTC_12x10_SRGB:
+      case VIRGL_FORMAT_ASTC_12x12_SRGB:
+         return epoxy_is_desktop_gl() ? -1 : 1;
       default:
          return -1;
       }
@@ -771,6 +835,26 @@ static int format_uncompressed_compressed_copy_compatible(enum virgl_formats src
 
 static boolean format_compressed_compressed_copy_compatible(enum virgl_formats src, enum virgl_formats dst)
 {
+   const bool is_desktop_gl = epoxy_is_desktop_gl();
+
+   if(!is_desktop_gl) {
+      if((src == VIRGL_FORMAT_ASTC_4x4 && dst == VIRGL_FORMAT_ASTC_4x4_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_5x4 && dst == VIRGL_FORMAT_ASTC_5x4_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_5x5 && dst == VIRGL_FORMAT_ASTC_5x5_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_6x5 && dst == VIRGL_FORMAT_ASTC_6x5_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_6x6 && dst == VIRGL_FORMAT_ASTC_6x6_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_8x5 && dst == VIRGL_FORMAT_ASTC_8x5_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_8x6 && dst == VIRGL_FORMAT_ASTC_8x6_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_8x8 && dst == VIRGL_FORMAT_ASTC_8x8_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_10x5 && dst == VIRGL_FORMAT_ASTC_10x5_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_10x6 && dst == VIRGL_FORMAT_ASTC_10x5_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_10x8 && dst == VIRGL_FORMAT_ASTC_10x8_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_10x10 && dst == VIRGL_FORMAT_ASTC_10x10_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_12x10 && dst == VIRGL_FORMAT_ASTC_12x10_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_12x12 && dst == VIRGL_FORMAT_ASTC_12x12_SRGB))
+         return true;
+   }
+
    if ((src == VIRGL_FORMAT_RGTC1_UNORM && dst == VIRGL_FORMAT_RGTC1_SNORM) ||
        (src == VIRGL_FORMAT_RGTC2_UNORM && dst == VIRGL_FORMAT_RGTC2_SNORM) ||
        (src == VIRGL_FORMAT_BPTC_RGBA_UNORM && dst == VIRGL_FORMAT_BPTC_SRGBA) ||
