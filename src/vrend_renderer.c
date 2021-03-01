@@ -7090,9 +7090,6 @@ vrend_renderer_resource_create(const struct vrend_renderer_resource_create_args 
 
 void vrend_renderer_resource_destroy(struct vrend_resource *res)
 {
-   if (res->readback_fb_id)
-      glDeleteFramebuffers(1, &res->readback_fb_id);
-
    if (has_bit(res->storage_bits, VREND_STORAGE_GL_TEXTURE)) {
       glDeleteTextures(1, &res->id);
    } else if (has_bit(res->storage_bits, VREND_STORAGE_GL_BUFFER)) {
@@ -7526,21 +7523,11 @@ static int vrend_renderer_transfer_write_iov(struct vrend_context *ctx,
 
       if ((!vrend_state.use_core_profile) && (res->y_0_top)) {
          GLuint buffers;
+         GLuint fb_id;
 
-         if (res->readback_fb_id == 0 || (int)res->readback_fb_level != info->level) {
-            GLuint fb_id;
-            if (res->readback_fb_id)
-               glDeleteFramebuffers(1, &res->readback_fb_id);
-
-            glGenFramebuffers(1, &fb_id);
-            glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
-            vrend_fb_bind_texture(res, 0, info->level, 0);
-
-            res->readback_fb_id = fb_id;
-            res->readback_fb_level = info->level;
-         } else {
-            glBindFramebuffer(GL_FRAMEBUFFER, res->readback_fb_id);
-         }
+         glGenFramebuffers(1, &fb_id);
+         glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
+         vrend_fb_bind_texture(res, 0, info->level, 0);
 
          buffers = GL_COLOR_ATTACHMENT0;
          glDrawBuffers(1, &buffers);
@@ -7558,6 +7545,7 @@ static int vrend_renderer_transfer_write_iov(struct vrend_context *ctx,
          glWindowPos2i(info->box->x, res->y_0_top ? (int)res->base.height0 - info->box->y : info->box->y);
          glDrawPixels(info->box->width, info->box->height, glformat, gltype,
                       data);
+         glDeleteFramebuffers(1, &fb_id);
       } else {
          uint32_t comp_size;
          GLint old_tex = 0;
@@ -7838,22 +7826,11 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
 
    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &old_fbo);
 
-   if (res->readback_fb_id == 0 || (int)res->readback_fb_level != info->level ||
-       (int)res->readback_fb_z != info->box->z) {
+   glGenFramebuffers(1, &fb_id);
+   glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
 
-      if (res->readback_fb_id)
-         glDeleteFramebuffers(1, &res->readback_fb_id);
+   vrend_fb_bind_texture(res, 0, info->level, info->box->z);
 
-      glGenFramebuffers(1, &fb_id);
-      glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
-
-      vrend_fb_bind_texture(res, 0, info->level, info->box->z);
-
-      res->readback_fb_id = fb_id;
-      res->readback_fb_level = info->level;
-      res->readback_fb_z = info->box->z;
-   } else
-      glBindFramebuffer(GL_FRAMEBUFFER, res->readback_fb_id);
    if (actually_invert)
       y1 = h - info->box->y - info->box->height;
    else
@@ -7945,6 +7922,7 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
       free(data);
    }
 
+   glDeleteFramebuffers(1, &fb_id);
    glBindFramebuffer(GL_FRAMEBUFFER, old_fbo);
 
    return 0;
@@ -10436,24 +10414,14 @@ void *vrend_renderer_get_cursor_contents(struct pipe_resource *pres,
    } else if (vrend_state.use_gles) {
       GLuint fb_id;
 
-      if (res->readback_fb_id == 0 || res->readback_fb_level != 0 || res->readback_fb_z != 0) {
+      glGenFramebuffers(1, &fb_id);
+      glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
 
-         if (res->readback_fb_id)
-            glDeleteFramebuffers(1, &res->readback_fb_id);
-
-         glGenFramebuffers(1, &fb_id);
-         glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
-
-         vrend_fb_bind_texture(res, 0, 0, 0);
-
-         res->readback_fb_id = fb_id;
-         res->readback_fb_level = 0;
-         res->readback_fb_z = 0;
-      } else {
-         glBindFramebuffer(GL_FRAMEBUFFER, res->readback_fb_id);
-      }
+      vrend_fb_bind_texture(res, 0, 0, 0);
 
       do_readpixels(0, 0, *width, *height, format, type, size, data);
+
+      glDeleteFramebuffers(1, &fb_id);
    } else {
       glBindTexture(res->target, res->id);
       glGetTexImage(res->target, 0, format, type, data);

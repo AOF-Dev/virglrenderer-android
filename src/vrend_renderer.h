@@ -71,11 +71,6 @@ struct vrend_resource {
    GLuint id;
    GLenum target;
 
-   /* fb id if we need to readback this resource */
-   GLuint readback_fb_id;
-   GLuint readback_fb_level;
-   GLuint readback_fb_z;
-
    GLuint tbo_tex_id;/* tbos have two ids to track */
    bool y_0_top;
 
