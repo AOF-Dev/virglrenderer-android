@@ -7745,17 +7745,28 @@ static int vrend_transfer_send_getteximage(struct vrend_resource *res,
    return 0;
 }
 
-static void do_readpixels(GLint x, GLint y,
+static void do_readpixels(struct vrend_resource *res,
+                          int idx, uint32_t level, uint32_t layer,
+                          GLint x, GLint y,
                           GLsizei width, GLsizei height,
                           GLenum format, GLenum type,
                           GLsizei bufSize, void *data)
 {
+   GLuint fb_id;
+
+   glGenFramebuffers(1, &fb_id);
+   glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
+
+   vrend_fb_bind_texture(res, idx, level, layer);
+
    if (has_feature(feat_arb_robustness))
       glReadnPixelsARB(x, y, width, height, format, type, bufSize, data);
    else if (has_feature(feat_gles_khr_robustness))
       glReadnPixelsKHR(x, y, width, height, format, type, bufSize, data);
    else
       glReadPixels(x, y, width, height, format, type, data);
+
+   glDeleteFramebuffers(1, &fb_id);
 }
 
 static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
@@ -7765,7 +7776,6 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
 {
    char *myptr = (char*)iov[0].iov_base + info->offset;
    int need_temp = 0;
-   GLuint fb_id;
    char *data;
    bool actually_invert, separate_invert = false;
    GLenum format, type;
@@ -7826,11 +7836,6 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
 
    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &old_fbo);
 
-   glGenFramebuffers(1, &fb_id);
-   glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
-
-   vrend_fb_bind_texture(res, 0, info->level, info->box->z);
-
    if (actually_invert)
       y1 = h - info->box->y - info->box->height;
    else
@@ -7838,8 +7843,6 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
 
    if (has_feature(feat_mesa_invert) && actually_invert)
       glPixelStorei(GL_PACK_INVERT_MESA, 1);
-   if (!vrend_format_is_ds(res->base.format))
-      glReadBuffer(GL_COLOR_ATTACHMENT0);
    if (!need_temp && row_stride)
       glPixelStorei(GL_PACK_ROW_LENGTH, row_stride);
 
@@ -7897,7 +7900,8 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
       }
    }
 
-   do_readpixels(info->box->x, y1, info->box->width, info->box->height, format, type, send_size, data);
+   do_readpixels(res, 0, info->level, info->box->z, info->box->x, y1,
+                 info->box->width, info->box->height, format, type, send_size, data);
 
    if (res->base.format == VIRGL_FORMAT_Z24X8_UNORM) {
       if (!vrend_state.use_core_profile)
@@ -7922,7 +7926,6 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
       free(data);
    }
 
-   glDeleteFramebuffers(1, &fb_id);
    glBindFramebuffer(GL_FRAMEBUFFER, old_fbo);
 
    return 0;
@@ -10412,16 +10415,7 @@ void *vrend_renderer_get_cursor_contents(struct pipe_resource *pres,
       glBindTexture(res->target, res->id);
       glGetnTexImageARB(res->target, 0, format, type, size, data);
    } else if (vrend_state.use_gles) {
-      GLuint fb_id;
-
-      glGenFramebuffers(1, &fb_id);
-      glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
-
-      vrend_fb_bind_texture(res, 0, 0, 0);
-
-      do_readpixels(0, 0, *width, *height, format, type, size, data);
-
-      glDeleteFramebuffers(1, &fb_id);
+      do_readpixels(res, 0, 0, 0, 0, 0, *width, *height, format, type, size, data);
    } else {
       glBindTexture(res->target, res->id);
       glGetTexImage(res->target, 0, format, type, data);
