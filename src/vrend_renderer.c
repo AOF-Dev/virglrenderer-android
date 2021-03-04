@@ -158,6 +158,7 @@ enum features_id
    feat_indep_blend_func,
    feat_indirect_draw,
    feat_indirect_params,
+   feat_khr_debug,
    feat_memory_object,
    feat_memory_object_fd,
    feat_mesa_invert,
@@ -257,6 +258,7 @@ static const  struct {
    FEAT(indep_blend_func, 40, 32,  "GL_ARB_draw_buffers_blend", "GL_OES_draw_buffers_indexed"),
    FEAT(indirect_draw, 40, 31,  "GL_ARB_draw_indirect" ),
    FEAT(indirect_params, 46, UNAVAIL,  "GL_ARB_indirect_parameters" ),
+   FEAT(khr_debug, 43, 32,  "GL_KHR_debug" ),
    FEAT(memory_object, UNAVAIL, UNAVAIL, "GL_EXT_memory_object"),
    FEAT(memory_object_fd, UNAVAIL, UNAVAIL, "GL_EXT_memory_object_fd"),
    FEAT(mesa_invert, UNAVAIL, UNAVAIL,  "GL_MESA_pack_invert" ),
@@ -10420,6 +10422,8 @@ static void vrend_renderer_fill_caps_v2(int gl_ver, int gles_ver,  union virgl_c
       caps->v2.capability_bits_v2 |= VIRGL_CAP_V2_MEMINFO;
    }
 
+   if (has_feature(feat_khr_debug))
+       caps->v2.capability_bits_v2 |= VIRGL_CAP_V2_STRING_MARKER;
 }
 
 void vrend_renderer_fill_caps(uint32_t set, uint32_t version,
@@ -11131,4 +11135,22 @@ static uint32_t vrend_renderer_get_video_memory(void)
       glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &video_memory);
 
    return video_memory;
+}
+
+void vrend_context_emit_string_marker(struct vrend_context *ctx, GLsizei length, const char * message)
+{
+    VREND_DEBUG(dbg_khr, ctx, "MARKER: '%.*s'\n", length, message);
+
+    if (has_feature(feat_khr_debug))  {
+        if (vrend_state.use_gles)
+            glDebugMessageInsertKHR(GL_DEBUG_SOURCE_APPLICATION_KHR,
+                                    GL_DEBUG_TYPE_MARKER_KHR,
+                                    0, GL_DEBUG_SEVERITY_NOTIFICATION,
+                                    length, message);
+        else
+            glDebugMessageInsert(GL_DEBUG_SOURCE_APPLICATION,
+                                 GL_DEBUG_TYPE_MARKER,
+                                 0, GL_DEBUG_SEVERITY_NOTIFICATION_KHR,
+                                 length, message);
+    }
 }
