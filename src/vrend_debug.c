@@ -76,9 +76,10 @@ static const char *command_names[VIRGL_MAX_COMMANDS] = {
    "END_TRANSFERS",
    "COPY_TRANSFER3D",
    "TWEAK",
-   "CLEAR_TEXTURE"
+   "CLEAR_TEXTURE",
    "PIPE_RESOURCE_CREATE",
    "PIPE_RESOURCE_SET_TYPE",
+   "GET_MEMORY_INFO",
 };
 
 static const char *object_type_names[VIRGL_MAX_OBJECTS] = {
