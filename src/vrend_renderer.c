@@ -11141,6 +11141,18 @@ void vrend_context_emit_string_marker(struct vrend_context *ctx, GLsizei length,
 {
     VREND_DEBUG(dbg_khr, ctx, "MARKER: '%.*s'\n", length, message);
 
+#ifdef ENABLE_TRACING
+    char buf[256];
+    if (length > 6 && !strncmp(message, "BEGIN:", 6)) {
+       snprintf(buf, 256, "%.*s", length - 6, &message[6]);
+       TRACE_SCOPE_BEGIN(buf);
+    } else if (length > 4 && !strncmp(message, "END:", 4)) {
+       snprintf(buf, 256, "%.*s", length - 4, &message[4]);
+       const char *scope = buf;
+       TRACE_SCOPE_END(scope);
+    }
+#endif
+
     if (has_feature(feat_khr_debug))  {
         if (vrend_state.use_gles)
             glDebugMessageInsertKHR(GL_DEBUG_SOURCE_APPLICATION_KHR,
