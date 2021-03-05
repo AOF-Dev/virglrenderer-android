@@ -11104,7 +11104,7 @@ void vrend_renderer_get_meminfo(struct vrend_context *ctx, uint32_t res_handle)
    info = (struct virgl_memory_info *)res->iov->iov_base;
 
    if (has_feature(feat_nvx_gpu_memory_info)) {
-         int i;
+         GLint i;
          glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &i);
          info->total_device_memory = i;
          glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &i);
@@ -11116,7 +11116,7 @@ void vrend_renderer_get_meminfo(struct vrend_context *ctx, uint32_t res_handle)
       }
 
    if (has_feature(feat_ati_meminfo)) {
-      int i[4];
+      GLint i[4];
       glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, i);
       info->avail_device_memory = i[0];
       info->avail_staging_memory = i[2];
@@ -11125,9 +11125,7 @@ void vrend_renderer_get_meminfo(struct vrend_context *ctx, uint32_t res_handle)
 
 static uint32_t vrend_renderer_get_video_memory(void)
 {
-   GLint video_memory = 0;
-
-   video_memory = vrend_winsys_query_video_memory();
+   GLint video_memory = vrend_winsys_query_video_memory();
 
    if (!video_memory && has_feature(feat_nvx_gpu_memory_info))
       glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &video_memory);
