@@ -82,6 +82,9 @@ PERCETTO_CATEGORY_DECLARE(VIRGL_PERCETTO_CATEGORIES)
 /* Trace high frequency events (tracing may impact performance). */
 #define TRACE_SCOPE_SLOW(SCOPE) TRACE_EVENT(virgls, SCOPE)
 
+#define TRACE_SCOPE_BEGIN(SCOPE) TRACE_EVENT_BEGIN(virgl, SCOPE)
+#define TRACE_SCOPE_END(SCOPE) do { TRACE_EVENT_END(virgl); (void)SCOPE; } while (0)
+
 #else
 
 const char *trace_begin(const char *scope);
@@ -93,6 +96,9 @@ void trace_end(const char **scope);
 
 #define TRACE_SCOPE_SLOW(SCOPE) TRACE_SCOPE(SCOPE)
 
+#define TRACE_SCOPE_BEGIN(SCOPE) trace_begin(SCOPE);
+#define TRACE_SCOPE_END(SCOPE)  trace_end(&SCOPE);
+
 #endif /* ENABLE_TRACING == TRACE_WITH_PERCETTO */
 
 #else
@@ -100,6 +106,8 @@ void trace_end(const char **scope);
 #define TRACE_FUNC()
 #define TRACE_SCOPE(SCOPE)
 #define TRACE_SCOPE_SLOW(SCOPE)
+#define TRACE_SCOPE_BEGIN(SCOPE, VAR)
+#define TRACE_SCOPE_END(VAR)
 #endif /* ENABLE_TRACING */
 
 #endif /* VIRGL_UTIL_H */
