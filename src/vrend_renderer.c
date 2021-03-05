@@ -766,6 +766,8 @@ void vrend_update_stencil_state(struct vrend_sub_context *sub_ctx);
 
 static struct vrend_format_table tex_conv_table[VIRGL_FORMAT_MAX_EXTENDED];
 
+static uint32_t vrend_renderer_get_video_memory(void);
+
 static inline bool vrend_format_can_sample(enum virgl_formats format)
 {
    if (tex_conv_table[format].bindings & VIRGL_BIND_SAMPLER_VIEW)
@@ -10408,7 +10410,7 @@ static void vrend_renderer_fill_caps_v2(int gl_ver, int gles_ver,  union virgl_c
       caps->v2.capability_bits_v2 |= VIRGL_CAP_V2_UNTYPED_RESOURCE;
 #endif
 
-   video_memory = vrend_winsys_query_video_memory();
+   video_memory = vrend_renderer_get_video_memory();
    if (video_memory) {
       caps->v2.capability_bits_v2 |= VIRGL_CAP_V2_VIDEO_MEMORY;
       caps->v2.max_video_memory = video_memory;
@@ -11119,4 +11121,16 @@ void vrend_renderer_get_meminfo(struct vrend_context *ctx, uint32_t res_handle)
       info->avail_device_memory = i[0];
       info->avail_staging_memory = i[2];
    }
+}
+
+static uint32_t vrend_renderer_get_video_memory(void)
+{
+   GLint video_memory = 0;
+
+   video_memory = vrend_winsys_query_video_memory();
+
+   if (!video_memory && has_feature(feat_nvx_gpu_memory_info))
+      glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &video_memory);
+
+   return video_memory;
 }
