@@ -416,6 +416,7 @@ struct vrend_shader {
    struct vrend_strarray glsl_strings;
    GLuint id;
    uint32_t uid;
+   bool is_compiled;
    struct vrend_shader_key key;
    struct list_head programs;
 };
@@ -1115,6 +1116,20 @@ static void vrend_destroy_shader_selector(struct vrend_shader_selector *sel)
    free(sel);
 }
 
+static inline int conv_shader_type(int type)
+{
+   switch (type) {
+   case PIPE_SHADER_VERTEX: return GL_VERTEX_SHADER;
+   case PIPE_SHADER_FRAGMENT: return GL_FRAGMENT_SHADER;
+   case PIPE_SHADER_GEOMETRY: return GL_GEOMETRY_SHADER;
+   case PIPE_SHADER_TESS_CTRL: return GL_TESS_CONTROL_SHADER;
+   case PIPE_SHADER_TESS_EVAL: return GL_TESS_EVALUATION_SHADER;
+   case PIPE_SHADER_COMPUTE: return GL_COMPUTE_SHADER;
+   default:
+      return 0;
+   };
+}
+
 static bool vrend_compile_shader(struct vrend_sub_context *sub_ctx,
                                  struct vrend_shader *shader)
 {
@@ -1123,6 +1138,8 @@ static bool vrend_compile_shader(struct vrend_sub_context *sub_ctx,
 
    for (int i = 0; i < shader->glsl_strings.num_strings; i++)
       shader_parts[i] = shader->glsl_strings.strings[i].buf;
+
+   shader->id = glCreateShader(conv_shader_type(shader->sel->type));
    glShaderSource(shader->id, shader->glsl_strings.num_strings, shader_parts, NULL);
    glCompileShader(shader->id);
    glGetShaderiv(shader->id, GL_COMPILE_STATUS, &param);
@@ -1130,11 +1147,13 @@ static bool vrend_compile_shader(struct vrend_sub_context *sub_ctx,
       char infolog[65536];
       int len;
       glGetShaderInfoLog(shader->id, 65536, &len, infolog);
+      glDeleteShader(shader->id);
       vrend_report_context_error(sub_ctx->parent, VIRGL_ERROR_CTX_ILLEGAL_SHADER, 0);
       vrend_printf("shader failed to compile\n%s\n", infolog);
       vrend_shader_dump(shader);
       return false;
    }
+   shader->is_compiled = true;
    return true;
 }
 
@@ -3415,27 +3434,12 @@ static inline void vrend_fill_shader_key(struct vrend_sub_context *sub_ctx,
    }
 }
 
-static inline int conv_shader_type(int type)
-{
-   switch (type) {
-   case PIPE_SHADER_VERTEX: return GL_VERTEX_SHADER;
-   case PIPE_SHADER_FRAGMENT: return GL_FRAGMENT_SHADER;
-   case PIPE_SHADER_GEOMETRY: return GL_GEOMETRY_SHADER;
-   case PIPE_SHADER_TESS_CTRL: return GL_TESS_CONTROL_SHADER;
-   case PIPE_SHADER_TESS_EVAL: return GL_TESS_EVALUATION_SHADER;
-   case PIPE_SHADER_COMPUTE: return GL_COMPUTE_SHADER;
-   default:
-      return 0;
-   };
-}
-
 static int vrend_shader_create(struct vrend_context *ctx,
                                struct vrend_shader *shader,
                                struct vrend_shader_key *key)
 {
    static uint32_t uid;
 
-   shader->id = glCreateShader(conv_shader_type(shader->sel->type));
    shader->uid = ++uid;
 
    if (shader->sel->tokens) {
@@ -3443,26 +3447,14 @@ static int vrend_shader_create(struct vrend_context *ctx,
                                       shader->sel->req_local_mem, key, &shader->sel->sinfo, &shader->glsl_strings);
       if (!ret) {
          vrend_report_context_error(ctx, VIRGL_ERROR_CTX_ILLEGAL_SHADER, shader->sel->type);
-         glDeleteShader(shader->id);
          return -1;
       }
    } else if (!ctx->shader_cfg.use_gles && shader->sel->type != TGSI_PROCESSOR_TESS_CTRL) {
       vrend_report_context_error(ctx, VIRGL_ERROR_CTX_ILLEGAL_SHADER, shader->sel->type);
-      glDeleteShader(shader->id);
       return -1;
    }
 
    shader->key = *key;
-   if (1) {//shader->sel->type == PIPE_SHADER_FRAGMENT || shader->sel->type == PIPE_SHADER_GEOMETRY) {
-      bool ret;
-
-      ret = vrend_compile_shader(ctx->sub, shader);
-      if (ret == false) {
-         glDeleteShader(shader->id);
-         strarray_free(&shader->glsl_strings, true);
-         return -1;
-      }
-   }
    return 0;
 }
 
@@ -4473,7 +4465,6 @@ void vrend_inject_tcs(struct vrend_sub_context *sub_ctx, int vertices_per_patch)
    sub_ctx->shaders[PIPE_SHADER_TESS_CTRL] = sel;
    sub_ctx->shaders[PIPE_SHADER_TESS_CTRL]->num_shaders = 1;
 
-   shader->id = glCreateShader(conv_shader_type(shader->sel->type));
    vrend_compile_shader(sub_ctx, shader);
 }
 
@@ -4534,6 +4525,23 @@ vrend_select_program(struct vrend_sub_context *sub_ctx, const struct pipe_draw_i
    vrend_shader_select(sub_ctx, shaders[PIPE_SHADER_VERTEX], &vs_dirty);
    sub_ctx->drawing = false;
 
+
+   for (uint i = 0; i < PIPE_SHADER_TYPES; i++) {
+      struct vrend_shader_selector *sel = shaders[i];
+      if (!sel)
+         continue;
+
+      struct vrend_shader *shader = sel->current;
+      if (shader && !shader->is_compiled) {//shader->sel->type == PIPE_SHADER_FRAGMENT || shader->sel->type == PIPE_SHADER_GEOMETRY) {
+         bool ret;
+
+         ret = vrend_compile_shader(sub_ctx, shader);
+         if (ret == false) {
+            strarray_free(&shader->glsl_strings, true);
+            return -1;
+         }
+      }
+   }
 
    if (!shaders[PIPE_SHADER_VERTEX]->current ||
        !shaders[PIPE_SHADER_FRAGMENT]->current ||
@@ -4879,8 +4887,14 @@ void vrend_launch_grid(struct vrend_context *ctx,
 
       vrend_shader_select(sub_ctx, sub_ctx->shaders[PIPE_SHADER_COMPUTE], &cs_dirty);
       if (!sub_ctx->shaders[PIPE_SHADER_COMPUTE]->current) {
-         vrend_printf( "failure to compile shader variants: %s\n", ctx->debug_name);
+         vrend_printf( "failure to select compute shader variant: %s\n", ctx->debug_name);
          return;
+      }
+      if (!sub_ctx->shaders[PIPE_SHADER_COMPUTE]->current->is_compiled) {
+         if(!vrend_compile_shader(sub_ctx, sub_ctx->shaders[PIPE_SHADER_COMPUTE]->current)) {
+            vrend_printf( "failure to compile compute shader variant: %s\n", ctx->debug_name);
+            return;
+         }
       }
       if (sub_ctx->shaders[PIPE_SHADER_COMPUTE]->current->id != (GLuint)sub_ctx->prog_ids[PIPE_SHADER_COMPUTE]) {
          prog = lookup_cs_shader_program(ctx, sub_ctx->shaders[PIPE_SHADER_COMPUTE]->current->id);
