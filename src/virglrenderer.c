@@ -247,7 +247,11 @@ int virgl_renderer_submit_cmd(void *buffer,
    struct virgl_context *ctx = virgl_context_lookup(ctx_id);
    if (!ctx)
       return EINVAL;
-   return ctx->submit_cmd(ctx, buffer, sizeof(uint32_t) * ndw);
+
+   if (ndw < 0 || (unsigned)ndw > UINT32_MAX / sizeof(uint32_t))
+      return EINVAL;
+
+   return ctx->submit_cmd(ctx, buffer, ndw * sizeof(uint32_t));
 }
 
 int virgl_renderer_transfer_write_iov(uint32_t handle,

@@ -1660,7 +1660,7 @@ static int vrend_decode_ctx_submit_cmd(struct virgl_context *ctx,
       return EINVAL;
 
    const uint32_t *typed_buf = (const uint32_t *)buffer;
-   const uint32_t buf_total = size / sizeof(uint32_t);
+   const uint32_t buf_total = (uint32_t)(size / sizeof(uint32_t));
    uint32_t buf_offset = 0;
 
    while (buf_offset < buf_total) {
