@@ -9255,12 +9255,13 @@ int vrend_renderer_create_fence(struct vrend_context *ctx,
 
 static void vrend_renderer_check_queries(void);
 
-static bool need_fence_retire_signal_locked(struct vrend_fence *fence)
+static bool need_fence_retire_signal_locked(struct vrend_fence *fence,
+                                            const struct list_head *signaled_list)
 {
    struct vrend_fence *next;
 
    /* last fence */
-   if (fence->fences.next == &vrend_state.fence_list)
+   if (fence->fences.next == signaled_list)
       return true;
 
    /* next fence belongs to a different context */
@@ -9294,7 +9295,7 @@ void vrend_renderer_check_fences(void)
             continue;
          }
 
-         if (need_fence_retire_signal_locked(fence)) {
+         if (need_fence_retire_signal_locked(fence, &vrend_state.fence_list)) {
             list_del(&fence->fences);
             list_addtail(&fence->fences, &retired_fences);
          } else {
@@ -9307,16 +9308,17 @@ void vrend_renderer_check_fences(void)
 
       LIST_FOR_EACH_ENTRY_SAFE(fence, stor, &vrend_state.fence_list, fences) {
          if (do_wait(fence, /* can_block */ false)) {
-            if (need_fence_retire_signal_locked(fence)) {
-               list_del(&fence->fences);
-               list_addtail(&fence->fences, &retired_fences);
-            } else {
-               free_fence_locked(fence);
-            }
+            list_del(&fence->fences);
+            list_addtail(&fence->fences, &retired_fences);
          } else {
             /* don't bother checking any subsequent ones */
             break;
          }
+      }
+
+      LIST_FOR_EACH_ENTRY_SAFE(fence, stor, &retired_fences, fences) {
+         if (!need_fence_retire_signal_locked(fence, &retired_fences))
+            free_fence_locked(fence);
       }
    }
 
