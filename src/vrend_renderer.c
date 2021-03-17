@@ -11083,6 +11083,7 @@ int vrend_renderer_create_ctx0_fence(uint32_t fence_id)
          VIRGL_RENDERER_FENCE_FLAG_MERGEABLE, fence_cookie);
 }
 
+#ifdef HAVE_EPOXY_EGL_H
 static bool find_ctx0_fence_locked(struct list_head *fence_list,
                                    void *fence_cookie,
                                    bool *seen_first,
@@ -11109,6 +11110,7 @@ static bool find_ctx0_fence_locked(struct list_head *fence_list,
 
    return false;
 }
+#endif
 
 int vrend_renderer_export_ctx0_fence(uint32_t fence_id, int* out_fd) {
 #ifdef HAVE_EPOXY_EGL_H
@@ -11145,6 +11147,9 @@ int vrend_renderer_export_ctx0_fence(uint32_t fence_id, int* out_fd) {
       else
          return virgl_egl_export_signaled_fence(egl, out_fd) ? 0 : -EINVAL;
    }
+#else
+   (void)fence_id;
+   (void)out_fd;
 #endif
    return -EINVAL;
 }
