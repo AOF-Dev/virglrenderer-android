@@ -300,6 +300,16 @@ util_hash_table_destroy(struct util_hash_table *ht)
    FREE(ht);
 }
 
+static unsigned hash_func_pointer(void *key)
+{
+   return XXH32(&key, sizeof(key), 0);
+}
+
+static int compare_func_pointer(void *key1, void *key2)
+{
+   return key1 != key2;
+}
+
 static unsigned hash_func_u64(void *key)
 {
    return XXH32(key, sizeof(uint64_t), 0);
@@ -310,9 +320,22 @@ static int compare_func_u64(void *key1, void *key2)
    return *(const uint64_t *)key1 != *(const uint64_t*)key2;
 }
 
+static bool util_hash_table_u64_uses_pointer(void)
+{
+   /* return true if we can store a uint64_t in a pointer */
+   return sizeof(void *) >= sizeof(uint64_t);
+}
+
 struct util_hash_table_u64 *
 util_hash_table_create_u64(void (*destroy)(void *value))
 {
+   if (util_hash_table_u64_uses_pointer()) {
+      return (struct util_hash_table_u64 *)
+         util_hash_table_create(hash_func_pointer,
+                                compare_func_pointer,
+                                destroy);
+   }
+
    return (struct util_hash_table_u64 *)
       util_hash_table_create(hash_func_u64,
                              compare_func_u64,
@@ -327,6 +350,9 @@ util_hash_table_set_u64(struct util_hash_table_u64 *ht_u64,
    struct util_hash_table *ht = (struct util_hash_table *)ht_u64;
    uint64_t *real_key;
    enum pipe_error err;
+
+   if (util_hash_table_u64_uses_pointer())
+      return util_hash_table_set(ht, uintptr_to_pointer(key), value);
 
    real_key = MALLOC(sizeof(*real_key));
    if (!real_key)
@@ -346,6 +372,9 @@ util_hash_table_get_u64(struct util_hash_table_u64 *ht_u64,
 {
    struct util_hash_table *ht = (struct util_hash_table *)ht_u64;
 
+   if (util_hash_table_u64_uses_pointer())
+      return util_hash_table_get(ht, uintptr_to_pointer(key));
+
    return util_hash_table_get(ht, &key);
 }
 
@@ -357,6 +386,11 @@ util_hash_table_remove_u64(struct util_hash_table_u64 *ht_u64,
    unsigned key_hash;
    struct cso_hash_iter iter;
    struct util_hash_table_item *item;
+
+   if (util_hash_table_u64_uses_pointer()) {
+      util_hash_table_remove(ht, uintptr_to_pointer(key));
+      return;
+   }
 
    key_hash = ht->hash(&key);
    iter = util_hash_table_find_iter(ht, &key, key_hash);
@@ -378,6 +412,11 @@ util_hash_table_destroy_u64(struct util_hash_table_u64 *ht_u64)
    struct util_hash_table *ht = (struct util_hash_table *)ht_u64;
    struct cso_hash_iter iter;
    struct util_hash_table_item *item;
+
+   if (util_hash_table_u64_uses_pointer()) {
+      util_hash_table_destroy(ht);
+      return;
+   }
 
    iter = cso_hash_first_node(ht->cso);
    while (!cso_hash_iter_is_null(iter)) {
