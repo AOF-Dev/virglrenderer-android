@@ -785,6 +785,7 @@ static int format_uncompressed_compressed_copy_compatible(enum virgl_formats src
       case VIRGL_FORMAT_ASTC_12x10:
       case VIRGL_FORMAT_ASTC_12x12:
       case VIRGL_FORMAT_ASTC_4x4_SRGB:
+      case VIRGL_FORMAT_ASTC_5x4_SRGB:
       case VIRGL_FORMAT_ASTC_5x5_SRGB:
       case VIRGL_FORMAT_ASTC_6x5_SRGB:
       case VIRGL_FORMAT_ASTC_6x6_SRGB:
@@ -847,7 +848,7 @@ static boolean format_compressed_compressed_copy_compatible(enum virgl_formats s
         (src == VIRGL_FORMAT_ASTC_8x6 && dst == VIRGL_FORMAT_ASTC_8x6_SRGB) ||
         (src == VIRGL_FORMAT_ASTC_8x8 && dst == VIRGL_FORMAT_ASTC_8x8_SRGB) ||
         (src == VIRGL_FORMAT_ASTC_10x5 && dst == VIRGL_FORMAT_ASTC_10x5_SRGB) ||
-        (src == VIRGL_FORMAT_ASTC_10x6 && dst == VIRGL_FORMAT_ASTC_10x5_SRGB) ||
+        (src == VIRGL_FORMAT_ASTC_10x6 && dst == VIRGL_FORMAT_ASTC_10x6_SRGB) ||
         (src == VIRGL_FORMAT_ASTC_10x8 && dst == VIRGL_FORMAT_ASTC_10x8_SRGB) ||
         (src == VIRGL_FORMAT_ASTC_10x10 && dst == VIRGL_FORMAT_ASTC_10x10_SRGB) ||
         (src == VIRGL_FORMAT_ASTC_12x10 && dst == VIRGL_FORMAT_ASTC_12x10_SRGB) ||
