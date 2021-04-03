@@ -7842,6 +7842,34 @@ static void do_readpixels(struct vrend_resource *res,
 
    vrend_fb_bind_texture(res, idx, level, layer);
 
+   /* Warn if the driver doesn't agree about the read format and type.
+      On desktop GL we can use basically any format and type to glReadPixels,
+      so we picked the format and type that matches the native format.
+
+      But on GLES we are limited to a very few set, luckily most GLES
+      implementations should return type and format that match the native
+      formats, and can be used for glReadPixels acording to the GLES spec.
+
+      But we have found that at least Mesa returned the wrong formats, again
+      luckily we are able to change Mesa. But just in case there are more bad
+      drivers out there, or we mess up the format somewhere, we warn here. */
+   if (vrend_state.use_gles) {
+      GLint imp;
+      if (type != GL_UNSIGNED_BYTE && type != GL_UNSIGNED_INT &&
+          type != GL_INT && type != GL_FLOAT) {
+         glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE, &imp);
+         if (imp != (GLint)type) {
+            vrend_printf( "GL_IMPLEMENTATION_COLOR_READ_TYPE is not expected native type 0x%x != imp 0x%x\n", type, imp);
+         }
+      }
+      if (format != GL_RGBA && format != GL_RGBA_INTEGER) {
+         glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT, &imp);
+         if (imp != (GLint)format) {
+            vrend_printf( "GL_IMPLEMENTATION_COLOR_READ_FORMAT is not expected native format 0x%x != imp 0x%x\n", format, imp);
+         }
+      }
+   }
+
    if (has_feature(feat_arb_robustness))
       glReadnPixelsARB(x, y, width, height, format, type, bufSize, data);
    else if (has_feature(feat_gles_khr_robustness))
@@ -7952,34 +7980,6 @@ static int vrend_transfer_send_readpixels(struct vrend_context *ctx,
       depth_scale = 1.0 / 256.0;
       if (!vrend_state.use_core_profile) {
          glPixelTransferf(GL_DEPTH_SCALE, depth_scale);
-      }
-   }
-
-   /* Warn if the driver doesn't agree about the read format and type.
-      On desktop GL we can use basically any format and type to glReadPixels,
-      so we picked the format and type that matches the native format.
-
-      But on GLES we are limited to a very few set, luckily most GLES
-      implementations should return type and format that match the native
-      formats, and can be used for glReadPixels acording to the GLES spec.
-
-      But we have found that at least Mesa returned the wrong formats, again
-      luckily we are able to change Mesa. But just in case there are more bad
-      drivers out there, or we mess up the format somewhere, we warn here. */
-   if (vrend_state.use_gles) {
-      GLint imp;
-      if (type != GL_UNSIGNED_BYTE && type != GL_UNSIGNED_INT &&
-          type != GL_INT && type != GL_FLOAT) {
-         glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE, &imp);
-         if (imp != (GLint)type) {
-            vrend_printf( "GL_IMPLEMENTATION_COLOR_READ_TYPE is not expected native type 0x%x != imp 0x%x\n", type, imp);
-         }
-      }
-      if (format != GL_RGBA && format != GL_RGBA_INTEGER) {
-         glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT, &imp);
-         if (imp != (GLint)format) {
-            vrend_printf( "GL_IMPLEMENTATION_COLOR_READ_FORMAT is not expected native format 0x%x != imp 0x%x\n", format, imp);
-         }
       }
    }
 
