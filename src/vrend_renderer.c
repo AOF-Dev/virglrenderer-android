@@ -293,7 +293,7 @@ static const  struct {
    FEAT(texture_query_lod, 40, UNAVAIL, "GL_ARB_texture_query_lod", "GL_EXT_texture_query_lod"),
    FEAT(texture_srgb_decode, UNAVAIL, UNAVAIL,  "GL_EXT_texture_sRGB_decode" ),
    FEAT(texture_storage, 42, 30,  "GL_ARB_texture_storage" ),
-   FEAT(texture_view, 43, UNAVAIL,  "GL_ARB_texture_view", "GL_OES_texture_view" ),
+   FEAT(texture_view, 43, UNAVAIL,  "GL_ARB_texture_view", "GL_OES_texture_view", "GL_EXT_texture_view" ),
    FEAT(timer_query, 33, UNAVAIL, "GL_ARB_timer_query", "GL_EXT_disjoint_timer_query"),
    FEAT(transform_feedback, 30, 30,  "GL_EXT_transform_feedback" ),
    FEAT(transform_feedback2, 40, 30,  "GL_ARB_transform_feedback2" ),
