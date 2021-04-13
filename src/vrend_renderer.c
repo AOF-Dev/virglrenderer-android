@@ -4600,6 +4600,7 @@ vrend_select_program(struct vrend_sub_context *sub_ctx, const struct pipe_draw_i
 
       prog->ref_context = sub_ctx;
    }
+   sub_ctx->cs_shader_dirty = true;
    return new_program;
 }
 
