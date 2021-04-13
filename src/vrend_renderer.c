@@ -2954,23 +2954,29 @@ void vrend_set_single_vbo(struct vrend_context *ctx,
    }
 }
 
+static void vrend_set_num_vbo_sub(struct vrend_sub_context *sub,
+                                  int num_vbo)
+{
+   int old_num = sub->num_vbos;
+   int i;
+
+   sub->num_vbos = num_vbo;
+   sub->old_num_vbos = old_num;
+
+   if (old_num != num_vbo)
+      sub->vbo_dirty = true;
+
+   for (i = num_vbo; i < old_num; i++) {
+      vrend_resource_reference((struct vrend_resource **)&sub->vbo[i].base.buffer, NULL);
+      sub->vbo[i].res_id = 0;
+   }
+
+}
+
 void vrend_set_num_vbo(struct vrend_context *ctx,
                        int num_vbo)
 {
-   int old_num = ctx->sub->num_vbos;
-   int i;
-
-   ctx->sub->num_vbos = num_vbo;
-   ctx->sub->old_num_vbos = old_num;
-
-   if (old_num != num_vbo)
-      ctx->sub->vbo_dirty = true;
-
-   for (i = num_vbo; i < old_num; i++) {
-      vrend_resource_reference((struct vrend_resource **)&ctx->sub->vbo[i].base.buffer, NULL);
-      ctx->sub->vbo[i].res_id = 0;
-   }
-
+   vrend_set_num_vbo_sub(ctx->sub, num_vbo);
 }
 
 void vrend_set_single_sampler_view(struct vrend_context *ctx,
@@ -6359,6 +6365,7 @@ static void vrend_destroy_sub_context(struct vrend_sub_context *sub)
       vrend_surface_reference(&sub->surf[i], NULL);
    }
 
+   vrend_set_num_vbo_sub(sub, 0);
    vrend_resource_reference((struct vrend_resource **)&sub->ib.buffer, NULL);
 
    vrend_object_fini_ctx_table(sub->object_hash);
@@ -6397,7 +6404,6 @@ void vrend_destroy_context(struct vrend_context *ctx)
    vrend_set_num_sampler_views(ctx, PIPE_SHADER_COMPUTE, 0, 0);
 
    vrend_set_streamout_targets(ctx, 0, 0, NULL);
-   vrend_set_num_vbo(ctx, 0);
 
    vrend_set_index_buffer(ctx, 0, 0, 0);
 
