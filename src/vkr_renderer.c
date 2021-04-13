@@ -145,6 +145,8 @@ struct vkr_device {
 
    PFN_vkGetImageDrmFormatModifierPropertiesEXT get_image_drm_format_modifier_properties;
 
+   PFN_vkGetMemoryFdPropertiesKHR get_memory_fd_properties;
+
    struct list_head queues;
 
    struct list_head free_syncs;
@@ -1508,6 +1510,9 @@ vkr_dispatch_vkCreateDevice(struct vn_dispatch_context *dispatch, struct vn_comm
    dev->get_image_drm_format_modifier_properties = (PFN_vkGetImageDrmFormatModifierPropertiesEXT)
       vkGetDeviceProcAddr(handle, "vkGetImageDrmFormatModifierPropertiesEXT");
 
+   dev->get_memory_fd_properties = (PFN_vkGetMemoryFdPropertiesKHR)
+      vkGetDeviceProcAddr(handle, "vkGetMemoryFdPropertiesKHR");
+
    list_inithead(&dev->queues);
    list_inithead(&dev->free_syncs);
 
@@ -1628,6 +1633,30 @@ vkr_dispatch_vkQueueWaitIdle(struct vn_dispatch_context *dispatch, UNUSED struct
    vkr_cs_decoder_set_fatal(&ctx->decoder);
 }
 
+static bool
+vkr_get_fd_handle_type_from_virgl_fd_type(struct vkr_physical_device *dev, enum virgl_resource_fd_type fd_type, VkExternalMemoryHandleTypeFlagBits *out_handle_type)
+{
+    assert(dev);
+    assert(out_handle_type);
+
+    switch (fd_type) {
+    case VIRGL_RESOURCE_FD_DMABUF:
+       if (!dev->EXT_external_memory_dma_buf)
+          return false;
+       *out_handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+       break;
+    case VIRGL_RESOURCE_FD_OPAQUE:
+       if (!dev->KHR_external_memory_fd)
+          return false;
+       *out_handle_type = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+       break;
+    default:
+       return false;
+    }
+
+    return true;
+}
+
 static void
 vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch, struct vn_command_vkAllocateMemory *args)
 {
@@ -1649,8 +1678,42 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch, struct vn_co
       ((VkMemoryAllocateInfo *)args->pAllocateInfo)->pNext = &export_info;
 #endif
 
+   /* translate VkImportMemoryResourceInfoMESA into VkImportMemoryFdInfoKHR */
+   VkImportMemoryResourceInfoMESA *import_resource_info = NULL;
+   VkImportMemoryFdInfoKHR import_fd_info = {
+      .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+      .fd = -1,
+   };
+   VkBaseInStructure *pprev = (VkBaseInStructure *)args->pAllocateInfo;
+   while (pprev->pNext) {
+      if (pprev->pNext->sType == VK_STRUCTURE_TYPE_IMPORT_MEMORY_RESOURCE_INFO_MESA) {
+          import_resource_info = (VkImportMemoryResourceInfoMESA *)pprev->pNext;
+          import_fd_info.pNext = pprev->pNext->pNext;
+          pprev->pNext = (const struct VkBaseInStructure *)&import_fd_info;
+          break;
+      }
+      pprev = (VkBaseInStructure *)pprev->pNext;
+   }
+   if (import_resource_info) {
+      uint32_t res_id = import_resource_info->resourceId;
+      struct vkr_resource_attachment *att = util_hash_table_get(ctx->resource_table, uintptr_to_pointer(res_id));
+      if (!att || !att->resource) {
+         args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+         return;
+      }
+
+      enum virgl_resource_fd_type fd_type = virgl_resource_export_fd(att->resource, &import_fd_info.fd);
+      if (!vkr_get_fd_handle_type_from_virgl_fd_type(dev->physical_device, fd_type, &import_fd_info.handleType)) {
+         close(import_fd_info.fd);
+         args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+         return;
+      }
+   }
+
    struct vkr_device_memory *mem = calloc(1, sizeof(*mem));
    if (!mem) {
+      if (import_resource_info)
+         close(import_fd_info.fd);
       args->ret = VK_ERROR_OUT_OF_HOST_MEMORY;
       return;
    }
@@ -1661,6 +1724,8 @@ vkr_dispatch_vkAllocateMemory(struct vn_dispatch_context *dispatch, struct vn_co
    vn_replace_vkAllocateMemory_args_handle(args);
    args->ret = vkAllocateMemory(args->device, args->pAllocateInfo, NULL, &mem->base.handle.device_memory);
    if (args->ret != VK_SUCCESS) {
+      if (import_resource_info)
+         close(import_fd_info.fd);
       free(mem);
       return;
    }
@@ -3225,6 +3290,38 @@ vkr_dispatch_vkGetImageDrmFormatModifierPropertiesEXT(struct vn_dispatch_context
 }
 
 static void
+vkr_dispatch_vkGetMemoryResourcePropertiesMESA(struct vn_dispatch_context *dispatch, struct vn_command_vkGetMemoryResourcePropertiesMESA *args)
+{
+   struct vkr_context *ctx = dispatch->data;
+   struct vkr_device *dev = (struct vkr_device *)args->device;
+   if (!dev || dev->base.type != VK_OBJECT_TYPE_DEVICE) {
+      vkr_cs_decoder_set_fatal(&ctx->decoder);
+      return;
+   }
+
+   struct vkr_resource_attachment *att = util_hash_table_get(ctx->resource_table, uintptr_to_pointer(args->resourceId));
+   if (!att || !att->resource) {
+      args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+      return;
+   }
+
+   VkExternalMemoryHandleTypeFlagBits handle_type;
+   if (!vkr_get_fd_handle_type_from_virgl_fd_type(dev->physical_device, att->resource->fd_type, &handle_type)) {
+      args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+      return;
+   }
+
+   VkMemoryFdPropertiesKHR memory_fd_properties = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR,
+      .pNext = NULL,
+      .memoryTypeBits = 0,
+   };
+   vn_replace_vkGetMemoryResourcePropertiesMESA_args_handle(args);
+   args->ret = dev->get_memory_fd_properties(args->device, handle_type, att->resource->fd, &memory_fd_properties);
+   args->pMemoryResourceProperties->memoryTypeBits = memory_fd_properties.memoryTypeBits;
+}
+
+static void
 vkr_dispatch_debug_log(UNUSED struct vn_dispatch_context *dispatch, const char *msg)
 {
    vrend_printf("vkr: %s\n", msg);
@@ -3464,6 +3561,8 @@ vkr_context_init_dispatch(struct vkr_context *ctx)
    dispatch->dispatch_vkCmdDrawIndirectByteCountEXT = vkr_dispatch_vkCmdDrawIndirectByteCountEXT;
 
    dispatch->dispatch_vkGetImageDrmFormatModifierPropertiesEXT = vkr_dispatch_vkGetImageDrmFormatModifierPropertiesEXT;
+
+   dispatch->dispatch_vkGetMemoryResourcePropertiesMESA = vkr_dispatch_vkGetMemoryResourcePropertiesMESA;
 }
 
 static int
