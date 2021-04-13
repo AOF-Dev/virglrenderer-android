@@ -672,8 +672,8 @@ static void vrend_set_tex_param(struct vrend_resource *src_res,
    if (src_res->base.nr_samples < 1) {
       GLenum filter = info->filter == PIPE_TEX_FILTER_NEAREST ?
                                        GL_NEAREST : GL_LINEAR;
-      glTexParameterf(src_res->target, GL_TEXTURE_MAG_FILTER, filter);
-      glTexParameterf(src_res->target, GL_TEXTURE_MIN_FILTER, filter);
+      glTexParameteri(src_res->target, GL_TEXTURE_MAG_FILTER, filter);
+      glTexParameteri(src_res->target, GL_TEXTURE_MIN_FILTER, filter);
    }
 }
 
