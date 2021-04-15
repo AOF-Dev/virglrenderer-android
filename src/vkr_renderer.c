@@ -3305,8 +3305,11 @@ vkr_dispatch_vkGetMemoryResourcePropertiesMESA(struct vn_dispatch_context *dispa
       return;
    }
 
+   int fd = -1;
+   enum virgl_resource_fd_type fd_type = virgl_resource_export_fd(att->resource, &fd);
    VkExternalMemoryHandleTypeFlagBits handle_type;
-   if (!vkr_get_fd_handle_type_from_virgl_fd_type(dev->physical_device, att->resource->fd_type, &handle_type)) {
+   if (!vkr_get_fd_handle_type_from_virgl_fd_type(dev->physical_device, fd_type, &handle_type)) {
+      close(fd);
       args->ret = VK_ERROR_INVALID_EXTERNAL_HANDLE;
       return;
    }
@@ -3317,8 +3320,9 @@ vkr_dispatch_vkGetMemoryResourcePropertiesMESA(struct vn_dispatch_context *dispa
       .memoryTypeBits = 0,
    };
    vn_replace_vkGetMemoryResourcePropertiesMESA_args_handle(args);
-   args->ret = dev->get_memory_fd_properties(args->device, handle_type, att->resource->fd, &memory_fd_properties);
+   args->ret = dev->get_memory_fd_properties(args->device, handle_type, fd, &memory_fd_properties);
    args->pMemoryResourceProperties->memoryTypeBits = memory_fd_properties.memoryTypeBits;
+   close(fd);
 }
 
 static void
