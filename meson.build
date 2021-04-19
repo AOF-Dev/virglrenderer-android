@@ -23,7 +23,7 @@
 
 project(
    'virglrenderer', 'c',
-   version: '0.9.0',
+   version: '0.9.1',
    license : 'MIT',
    meson_version : '>= 0.46',
    default_options : ['buildtype=release', 'b_ndebug=if-release',
@@ -40,7 +40,7 @@ project(
 
 binary_age    = 1
 interface_age = 5
-revision      = 3
+revision      = 4
 
 cc = meson.get_compiler('c')
 
@@ -80,7 +80,7 @@ epoxy_dep = dependency('epoxy', version: '>= 1.5.4')
 m_dep = cc.find_library('m')
 
 conf_data = configuration_data()
-conf_data.set('VERSION', '0.8.1')
+conf_data.set('VERSION', '0.9.1')
 
 with_tracing = get_option('tracing')
 
