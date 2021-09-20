@@ -53,11 +53,17 @@ virglrenderer_sources = [
 
 
 virgl_egl_sources = [
-   'virgl_gbm.c',
-   'virgl_gbm.h',
    'virgl_egl_context.c',
    'virgl_egl.h',
 ]
+
+if not egl_without_gbm
+   virgl_egl_sources += [
+      'virgl_gbm.c',
+      'virgl_gbm.h',
+   ]
+endif
+
 
 virgl_glx_sources = [
    'virgl_glx_context.c',
