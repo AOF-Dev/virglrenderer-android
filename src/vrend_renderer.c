@@ -61,7 +61,9 @@
 #endif
 
 #ifdef HAVE_EPOXY_EGL_H
+#ifndef EGL_WITHOUT_GBM
 #include "virgl_gbm.h"
+#endif
 #include "virgl_egl.h"
 extern struct virgl_gbm *gbm;
 extern struct virgl_egl *egl;

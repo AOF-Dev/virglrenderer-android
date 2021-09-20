@@ -39,7 +39,9 @@
 #include "virglrenderer.h"
 
 #ifdef HAVE_EPOXY_EGL_H
+#ifndef EGL_WITHOUT_GBM
 #include "virgl_gbm.h"
+#endif
 #include "virgl_egl.h"
 #endif
 
@@ -189,7 +191,7 @@ int virgl_renderer_resource_get_info(int res_handle,
 {
    int ret;
    ret = vrend_renderer_resource_get_info(res_handle, (struct vrend_renderer_resource_info *)info);
-#ifdef HAVE_EPOXY_EGL_H
+#if defined(HAVE_EPOXY_EGL_H) && !defined(EGL_WITHOUT_GBM)
    if (ret == 0 && use_context == CONTEXT_EGL)
       return virgl_egl_get_fourcc_for_texture(egl, info->tex_id, info->virgl_format, &info->drm_fourcc);
 #endif
@@ -296,10 +298,12 @@ void virgl_renderer_cleanup(UNUSED void *cookie)
       virgl_egl_destroy(egl);
       egl = NULL;
       use_context = CONTEXT_NONE;
+#ifndef EGL_WITHOUT_GBM
       if (gbm) {
          virgl_gbm_fini(gbm);
          gbm = NULL;
       }
+#endif
    }
 #endif
 #ifdef HAVE_EPOXY_GLX_H
@@ -325,6 +329,7 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
 
    if (flags & VIRGL_RENDERER_USE_EGL) {
 #ifdef HAVE_EPOXY_EGL_H
+#ifndef EGL_WITHOUT_GBM
       int fd = -1;
       if (cbs->version >= 2 && cbs->get_drm_fd) {
          fd = cbs->get_drm_fd(cookie);
@@ -337,15 +342,16 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
       gbm = virgl_gbm_init(fd);
       if (fd > 0 && !gbm)
          return -1;
-
+#endif
       egl = virgl_egl_init(gbm, flags & VIRGL_RENDERER_USE_SURFACELESS,
                            flags & VIRGL_RENDERER_USE_GLES);
       if (!egl) {
+#ifndef EGL_WITHOUT_GBM
          if (gbm) {
             virgl_gbm_fini(gbm);
             gbm = NULL;
          }
-
+#endif
          return -1;
       }
 
@@ -374,7 +380,7 @@ int virgl_renderer_init(void *cookie, int flags, struct virgl_renderer_callbacks
 
 int virgl_renderer_get_fd_for_texture(uint32_t tex_id, int *fd)
 {
-#ifdef HAVE_EPOXY_EGL_H
+#if defined(HAVE_EPOXY_EGL_H) && !defined(EGL_WITHOUT_GBM)
    if (!egl)
       return -1;
 
@@ -386,7 +392,7 @@ int virgl_renderer_get_fd_for_texture(uint32_t tex_id, int *fd)
 
 int virgl_renderer_get_fd_for_texture2(uint32_t tex_id, int *fd, int *stride, int *offset)
 {
-#ifdef HAVE_EPOXY_EGL_H
+#if defined(HAVE_EPOXY_EGL_H) && !defined(EGL_WITHOUT_GBM)
    if (!egl)
       return -1;
 

@@ -31,7 +31,11 @@
 #include "vrend_debug.h"
 #include "vrend_tweaks.h"
 #include "vrend_iov.h"
+#ifdef EGL_WITHOUT_GBM
+#define VIRGL_GBM_MAX_PLANES 4
+#else
 #include "virgl_gbm.h"
+#endif
 #include "virgl_hw.h"
 #include <epoxy/gl.h>
 
