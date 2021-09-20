@@ -89,7 +89,6 @@ static void vtest_main_wait_for_socket_accept(void);
 static void vtest_main_tidy_fds(void);
 static void vtest_main_close_socket(void);
 
-
 int main(int argc, char **argv)
 {
 #ifdef __AFL_LOOP
@@ -160,6 +159,7 @@ start:
 #define OPT_USE_EGL_SURFACELESS 's'
 #define OPT_USE_GLES 'e'
 #define OPT_RENDERNODE 'r'
+#define OPT_SOCKET_NAME 'n'
 
 static void vtest_main_parse_args(int argc, char **argv)
 {
@@ -172,6 +172,7 @@ static void vtest_main_parse_args(int argc, char **argv)
       {"use-egl-surfaceless", no_argument, NULL, OPT_USE_EGL_SURFACELESS},
       {"use-gles",            no_argument, NULL, OPT_USE_GLES},
       {"rendernode",          required_argument, NULL, OPT_RENDERNODE},
+      {"socket-name",         required_argument, NULL, OPT_SOCKET_NAME},
       {0, 0, 0, 0}
    };
 
@@ -203,10 +204,13 @@ static void vtest_main_parse_args(int argc, char **argv)
       case OPT_RENDERNODE:
          prog.render_device = optarg;
          break;
+      case OPT_SOCKET_NAME:
+         prog.socket_name = optarg;
+         break;
       default:
          printf("Usage: %s [--no-fork] [--no-loop-or-fork] [--use-glx] "
                 "[--use-egl-surfaceless] [--use-gles] [--rendernode <dev>]"
-                " [file]\n", argv[0]);
+                " [--socket-name <path>] [file]\n", argv[0]);
          exit(EXIT_FAILURE);
          break;
       }
@@ -222,10 +226,15 @@ static void vtest_main_parse_args(int argc, char **argv)
 
 static void vtest_main_getenv(void)
 {
+   const char* socket_name = NULL;
    prog.use_glx = getenv("VTEST_USE_GLX") != NULL;
    prog.use_egl_surfaceless = getenv("VTEST_USE_EGL_SURFACELESS") != NULL;
    prog.use_gles = getenv("VTEST_USE_GLES") != NULL;
    prog.render_device = getenv("VTEST_RENDERNODE");
+   socket_name = getenv("VTEST_SOCKET_NAME");
+   if (socket_name != NULL) {
+      prog.socket_name = socket_name;
+   }
 }
 
 static void handler(int sig, siginfo_t *si, void *unused)
