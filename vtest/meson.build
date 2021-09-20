@@ -37,6 +37,7 @@ virgl_test_server = executable(
    'virgl_test_server',
    virgl_test_server_sources,
    dependencies : [libvirglrenderer_dep, gallium_dep],
+   link_args: ['-rdynamic'],
    install : true
 )
 

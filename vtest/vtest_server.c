@@ -89,6 +89,7 @@ static void vtest_main_wait_for_socket_accept(void);
 static void vtest_main_tidy_fds(void);
 static void vtest_main_close_socket(void);
 
+VIRGL_EXPORT
 int main(int argc, char **argv)
 {
 #ifdef __AFL_LOOP
