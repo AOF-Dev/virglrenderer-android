@@ -51,6 +51,7 @@ int vrend_winsys_init(uint32_t flags, int preferred_fd)
 {
    if (flags & VIRGL_RENDERER_USE_EGL) {
 #ifdef HAVE_EPOXY_EGL_H
+#ifndef EGL_WITHOUT_GBM
       /*
        * If the user specifies a preferred DRM fd and we can't use it, fail. If the user doesn't
        * specify an fd, it's possible to initialize EGL without one.
@@ -58,15 +59,16 @@ int vrend_winsys_init(uint32_t flags, int preferred_fd)
       gbm = virgl_gbm_init(preferred_fd);
       if (preferred_fd > 0 && !gbm)
          return -1;
-
+#endif
       egl = virgl_egl_init(gbm, flags & VIRGL_RENDERER_USE_SURFACELESS,
                            flags & VIRGL_RENDERER_USE_GLES);
       if (!egl) {
+#ifndef EGL_WITHOUT_GBM
          if (gbm) {
             virgl_gbm_fini(gbm);
             gbm = NULL;
          }
-
+#endif
          return -1;
       }
 
@@ -98,10 +100,12 @@ void vrend_winsys_cleanup(void)
       virgl_egl_destroy(egl);
       egl = NULL;
       use_context = CONTEXT_NONE;
+#ifndef EGL_WITHOUT_GBM
       if (gbm) {
          virgl_gbm_fini(gbm);
          gbm = NULL;
       }
+#endif
    }
 #endif
 #ifdef HAVE_EPOXY_GLX_H
@@ -169,7 +173,7 @@ int vrend_winsys_has_gl_colorspace(void)
 
 int vrend_winsys_get_fourcc_for_texture(uint32_t tex_id, uint32_t format, int *fourcc)
 {
-#ifdef HAVE_EPOXY_EGL_H
+#if defined(HAVE_EPOXY_EGL_H) && !defined(EGL_WITHOUT_GBM)
    if (use_context == CONTEXT_EGL)
       return virgl_egl_get_fourcc_for_texture(egl, tex_id, format, fourcc);
 #else
@@ -182,7 +186,7 @@ int vrend_winsys_get_fourcc_for_texture(uint32_t tex_id, uint32_t format, int *f
 
 int vrend_winsys_get_fd_for_texture(uint32_t tex_id, int *fd)
 {
-#ifdef HAVE_EPOXY_EGL_H
+#if defined(HAVE_EPOXY_EGL_H) && !defined(EGL_WITHOUT_GBM)
    if (!egl)
       return -1;
 
@@ -196,7 +200,7 @@ int vrend_winsys_get_fd_for_texture(uint32_t tex_id, int *fd)
 
 int vrend_winsys_get_fd_for_texture2(uint32_t tex_id, int *fd, int *stride, int *offset)
 {
-#ifdef HAVE_EPOXY_EGL_H
+#if defined(HAVE_EPOXY_EGL_H) && !defined(EGL_WITHOUT_GBM)
    if (!egl)
       return -1;
 

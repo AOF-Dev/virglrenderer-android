@@ -10969,7 +10969,7 @@ vrend_renderer_pipe_resource_set_type(struct vrend_context *ctx,
 
    /* resource is still untyped */
    if (!res->pipe_resource) {
-#ifdef HAVE_EPOXY_EGL_H
+#if defined(HAVE_EPOXY_EGL_H) && !defined(EGL_WITHOUT_GBM)
       const struct vrend_renderer_resource_create_args create_args = {
          .target = PIPE_TEXTURE_2D,
          .format = args->format,

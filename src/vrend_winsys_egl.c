@@ -34,7 +34,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#ifdef HAVE_LIBDRM
 #include <xf86drm.h>
+#endif
 
 #include "util/u_memory.h"
 
@@ -42,7 +44,9 @@
 #include "vrend_winsys.h"
 #include "vrend_winsys_egl.h"
 #include "virgl_hw.h"
+#ifndef EGL_WITHOUT_GBM
 #include "vrend_winsys_gbm.h"
+#endif
 #include "virgl_util.h"
 
 #define EGL_KHR_SURFACELESS_CONTEXT            BIT(0)
@@ -298,13 +302,15 @@ struct virgl_egl *virgl_egl_init(struct virgl_gbm *gbm, bool surfaceless, bool g
 
    if (surfaceless)
       conf_att[1] = EGL_PBUFFER_BIT;
+#ifndef EGL_WITHOUT_GBM
    else if (!gbm)
       goto fail;
 
    egl->gbm = gbm;
+#endif
    egl->different_gpu = false;
    const char *client_extensions = eglQueryString (NULL, EGL_EXTENSIONS);
-
+#ifndef EGL_WITHOUT_GBM
 #ifdef ENABLE_MINIGBM_ALLOCATION
    if (virgl_egl_get_display(egl)) {
      /* Make -Wdangling-else happy. */
@@ -339,15 +345,16 @@ struct virgl_egl *virgl_egl_init(struct virgl_gbm *gbm, bool surfaceless, bool g
    } else {
       egl->egl_display = eglGetDisplay((EGLNativeDisplayType)egl->gbm->device);
    }
-
+#endif
    if (!egl->egl_display) {
+#ifndef EGL_WITHOUT_GBM
       /*
        * Don't fallback to the default display if the fd provided by (*get_drm_fd)
        * can't be used.
        */
       if (egl->gbm && egl->gbm->fd < 0)
          goto fail;
-
+#endif
       egl->egl_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
       if (!egl->egl_display)
          goto fail;
@@ -453,7 +460,7 @@ virgl_renderer_gl_context virgl_egl_get_current_context(UNUSED struct virgl_egl 
    EGLContext egl_ctx = eglGetCurrentContext();
    return (virgl_renderer_gl_context)egl_ctx;
 }
-
+#ifndef EGL_WITHOUT_GBM
 int virgl_egl_get_fourcc_for_texture(struct virgl_egl *egl, uint32_t tex_id, uint32_t format, int *fourcc)
 {
    int ret = EINVAL;
@@ -552,7 +559,7 @@ int virgl_egl_get_fd_for_texture(struct virgl_egl *egl, uint32_t tex_id, int *fd
    eglDestroyImageKHR(egl->egl_display, image);
    return ret;
 }
-
+#endif
 bool virgl_has_egl_khr_gl_colorspace(struct virgl_egl *egl)
 {
    return has_bit(egl->extension_bits, EGL_KHR_GL_COLORSPACE);
