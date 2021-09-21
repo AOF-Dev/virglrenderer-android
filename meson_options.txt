@@ -32,6 +32,13 @@ option(
 )
 
 option(
+  'egl_without_gbm',
+  type : 'boolean',
+  value : 'false',
+  description : 'Build egl platform without gbm'
+)
+
+option(
   'minigbm_allocation',
   type : 'boolean',
   value : 'false',

@@ -4,10 +4,12 @@
 #mesondefine HAVE_EPOXY_EGL_H
 #mesondefine HAVE_EPOXY_GLX_H
 #mesondefine ENABLE_MINIGBM_ALLOCATION
+#mesondefine EGL_WITHOUT_GBM
 #mesondefine ENABLE_VENUS
 #mesondefine HAVE_FUNC_ATTRIBUTE_VISIBILITY
 #mesondefine HAVE_EVENTFD_H
 #mesondefine HAVE_DLFCN_H
+#mesondefine HAVE_LIBDRM
 #mesondefine ENABLE_TRACING
 #mesondefine PIPE_ARCH_LITTLE_ENDIAN
 #mesondefine PIPE_ARCH_BIG_ENDIAN

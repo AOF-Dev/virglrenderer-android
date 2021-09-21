@@ -74,7 +74,7 @@ endforeach
 
 prog_python = import('python').find_installation('python3')
 
-libdrm_dep = dependency('libdrm', version : '>=2.4.50')
+libdrm_dep = dependency('libdrm', version : '>=2.4.50', required : false)
 thread_dep = dependency('threads')
 epoxy_dep = dependency('epoxy', version: '>= 1.5.4')
 m_dep = cc.find_library('m')
@@ -160,6 +160,10 @@ if get_option('buildtype') == 'debug'
    add_global_arguments('-DDEBUG=1', language : 'c')
 endif
 
+if libdrm_dep.found()
+  conf_data.set('HAVE_LIBDRM', 1)
+endif
+
 platforms = get_option('platforms')
 
 require_egl = platforms.contains('egl')
@@ -172,8 +176,13 @@ with_glx = require_glx or auto_egl_glx
 have_egl = false
 have_glx = false
 
+egl_without_gbm = get_option('egl_without_gbm')
+
 with_minigbm_allocation = get_option('minigbm_allocation')
 if with_minigbm_allocation
+   if egl_without_gbm
+      error('Cannot build gbm allocation without gbm')
+   endif
    conf_data.set('ENABLE_MINIGBM_ALLOCATION', 1)
    _gbm_ver = '18.0.0'
 else
@@ -182,8 +191,14 @@ endif
 
 if with_egl
    if cc.has_header('epoxy/egl.h', dependencies: epoxy_dep) and epoxy_dep.get_pkgconfig_variable('epoxy_has_egl') == '1'
-      gbm_dep = dependency('gbm', version: '>= ' + _gbm_ver, required: require_egl)
-      have_egl = gbm_dep.found()
+      if egl_without_gbm
+         gbm_dep = dependency('', required : false)
+         have_egl = true
+         conf_data.set('EGL_WITHOUT_GBM', 1)
+      else
+         gbm_dep = dependency('gbm', version: '>= ' + _gbm_ver, required: require_egl)
+         have_egl = gbm_dep.found()
+      endif
       conf_data.set('HAVE_EPOXY_EGL_H', 1)
    else
       assert(not require_egl,
@@ -252,7 +267,7 @@ lines = [
    '',
 ]
 
-lines += 'egl:       ' + (have_egl ? 'yes' : 'no')
+lines += 'egl:       ' + (have_egl ? 'yes' : 'no') + (egl_without_gbm ? ' (no gbm)' : '')
 lines += 'glx:       ' + (have_glx ? 'yes' : 'no')
 lines += ''
 lines += 'minigbm_alloc: ' + (with_minigbm_allocation ? 'yes' : 'no' )
