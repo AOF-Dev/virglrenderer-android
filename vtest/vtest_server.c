@@ -163,6 +163,7 @@ while (__AFL_LOOP(1000)) {
 #define OPT_USE_GLES 'e'
 #define OPT_RENDERNODE 'r'
 #define OPT_VENUS 'v'
+#define OPT_SOCKET_NAME 'n'
 
 static void vtest_server_parse_args(int argc, char **argv)
 {
@@ -177,6 +178,7 @@ static void vtest_server_parse_args(int argc, char **argv)
       {"use-gles",            no_argument, NULL, OPT_USE_GLES},
       {"rendernode",          required_argument, NULL, OPT_RENDERNODE},
       {"venus",               no_argument, NULL, OPT_VENUS},
+      {"socket-name",         required_argument, NULL, OPT_SOCKET_NAME},
       {0, 0, 0, 0}
    };
 
@@ -212,6 +214,9 @@ static void vtest_server_parse_args(int argc, char **argv)
       case OPT_RENDERNODE:
          server.render_device = optarg;
          break;
+      case OPT_SOCKET_NAME:
+         server.socket_name = optarg;
+         break;
 #ifdef ENABLE_VENUS
       case OPT_VENUS:
          server.venus = true;
@@ -224,7 +229,7 @@ static void vtest_server_parse_args(int argc, char **argv)
 #ifdef ENABLE_VENUS
                 " [--venus]"
 #endif
-                " [file]\n", argv[0]);
+                " [--socket-name <path>] [file]\n", argv[0]);
          exit(EXIT_FAILURE);
          break;
       }
@@ -259,10 +264,15 @@ static void vtest_server_parse_args(int argc, char **argv)
 
 static void vtest_server_getenv(void)
 {
+   const char* socket_name = NULL;
    server.use_glx = getenv("VTEST_USE_GLX") != NULL;
    server.use_egl_surfaceless = getenv("VTEST_USE_EGL_SURFACELESS") != NULL;
    server.use_gles = getenv("VTEST_USE_GLES") != NULL;
    server.render_device = getenv("VTEST_RENDERNODE");
+   socket_name = getenv("VTEST_SOCKET_NAME");
+   if (socket_name != NULL) {
+      server.socket_name = socket_name;
+   }
 }
 
 static void handler(int sig, siginfo_t *si, void *unused)
