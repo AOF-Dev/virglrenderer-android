@@ -125,7 +125,7 @@ static void vtest_server_run(void);
 static void vtest_server_close_socket(void);
 static int vtest_client_dispatch_commands(struct vtest_client *client);
 
-
+VIRGL_EXPORT
 int main(int argc, char **argv)
 {
 #ifdef __AFL_LOOP
